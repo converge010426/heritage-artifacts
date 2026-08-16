@@ -670,7 +670,7 @@ export default function App() {
                   {[
                     { step: '01', title: 'Commission', icon: Scroll, desc: `Engagement starts with your vision.`, meta: `Secure Fee: ${pricing.deposit}` },
                     { step: '02', title: 'Acquisition', icon: Search, desc: `We research records, verify lineages, and audit archives.`, meta: '7-14 Days Research' },
-                    { step: '03', title: 'Artifact', icon: Award, desc: `The design is finalized and your artifact is delivered.`, meta: `${pricing.fullPrice} — Heirloom Quality` },
+                    { step: '03', title: 'Artifact', icon: Award, desc: `The design is finalized and your artifact is delivered.`, meta: '__FULLPRICE__' },
                   ].map((item, idx) => (
                     <motion.div 
                       key={idx} 
@@ -682,9 +682,9 @@ export default function App() {
                       </div>
                       <div className="space-y-4">
                         <h4 className="font-bold text-heritage-earth uppercase tracking-widest text-sm">{item.title}</h4>
-                        <p className="text-heritage-earth/80 text-sm italic leading-relaxed font-medium">{item.desc}</p>
+                        <p className="text-heritage-earth text-sm italic leading-relaxed font-semibold">{item.desc}</p>
                         <div className="pt-4 border-t border-heritage-gold/30">
-                          <p className="text-xs font-bold uppercase tracking-widest text-heritage-gold">{item.meta}</p>
+                          <p className="text-xs font-bold uppercase tracking-widest text-heritage-gold">{item.meta === '__FULLPRICE__' ? `${pricing.fullPrice} — Heirloom Quality` : item.meta}</p>
                         </div>
                       </div>
                     </motion.div>
