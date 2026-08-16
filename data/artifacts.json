@@ -1,0 +1,7 @@
+[
+  { "id": 1, "name": "The Lupini Legacy", "subject": "Lupini Family", "img": "/artifact-preview-1.jpeg" },
+  { "id": 2, "name": "Cape Origins", "subject": "The Van Kniphorst Line", "img": "/artifact-preview-2.jpeg" },
+  { "id": 3, "name": "European Roots", "subject": "Dixon Ancestry", "img": "/artifact-preview-3.jpeg" },
+  { "id": 4, "name": "Pioneer Spirits", "subject": "The Smuts Chronicles", "img": "/artifact-preview-4.jpeg" },
+  { "id": 5, "name": "Family Maguire", "subject": "Brenda Thompson", "img": "/artifact-preview-5.jpeg" }
+]
