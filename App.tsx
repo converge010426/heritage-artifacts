@@ -670,7 +670,7 @@ export default function App() {
                   {[
                     { step: '01', title: 'Commission', icon: Scroll, desc: `Engagement starts with your vision.`, meta: `Secure Fee: ${pricing.deposit}` },
                     { step: '02', title: 'Acquisition', icon: Search, desc: `We research records, verify lineages, and audit archives.`, meta: '7-14 Days Research' },
-                    { step: '03', title: 'Artifact', icon: Award, desc: `The design is finalized and your artifact is delivered.`, meta: 'Heirloom Quality' },
+                    { step: '03', title: 'Artifact', icon: Award, desc: `The design is finalized and your artifact is delivered.`, meta: `${pricing.fullPrice} — Heirloom Quality` },
                   ].map((item, idx) => (
                     <motion.div 
                       key={idx} 
@@ -682,9 +682,9 @@ export default function App() {
                       </div>
                       <div className="space-y-4">
                         <h4 className="font-bold text-heritage-earth uppercase tracking-widest text-sm">{item.title}</h4>
-                        <p className="text-heritage-earth/60 text-xs italic leading-relaxed">{item.desc}</p>
-                        <div className="pt-4 border-t border-heritage-gold/10">
-                          <p className="text-[9px] font-bold uppercase tracking-widest text-heritage-gold">{item.meta}</p>
+                        <p className="text-heritage-earth/80 text-sm italic leading-relaxed font-medium">{item.desc}</p>
+                        <div className="pt-4 border-t border-heritage-gold/30">
+                          <p className="text-xs font-bold uppercase tracking-widest text-heritage-gold">{item.meta}</p>
                         </div>
                       </div>
                     </motion.div>
@@ -837,7 +837,9 @@ export default function App() {
                    </div>
                    <div className="flex-1 flex flex-col gap-4 text-center">
                       <div className="bg-heritage-earth text-heritage-gold p-8 rounded-3xl shadow-2xl border border-heritage-gold/30">
-                         <p className="text-[10px] uppercase tracking-widest opacity-60 mb-2">Commission Deposit (ZA)</p>
+                         <p className="text-[10px] uppercase tracking-widest opacity-60 mb-1">Full Artifact Price (ZA)</p>
+                         <p className="text-xl font-serif tracking-tight mb-4 opacity-80">{pricing.fullPrice}</p>
+                         <p className="text-[10px] uppercase tracking-widest opacity-60 mb-2">Deposit to Commence</p>
                          <p className="text-4xl font-bold tracking-tighter mb-6">{pricing.deposit}</p>
                          <button 
                           disabled={isSubmitting}
