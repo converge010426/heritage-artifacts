@@ -670,7 +670,7 @@ export default function App() {
                   {[
                     { step: '01', title: 'Commission', icon: Scroll, desc: `Engagement starts with your vision.`, meta: `Secure Fee: ${pricing.deposit}` },
                     { step: '02', title: 'Acquisition', icon: Search, desc: `We research records, verify lineages, and audit archives.`, meta: '7-14 Days Research' },
-                    { step: '03', title: 'Artifact', icon: Award, desc: `The design is finalized and your artifact is delivered.`, meta: '__FULLPRICE__' },
+                    { step: '03', title: 'Artifact', icon: Award, desc: `The design is finalized and your artifact is delivered.`, meta: 'Heirloom Quality', price: pricing.fullPrice },
                   ].map((item, idx) => (
                     <motion.div 
                       key={idx} 
@@ -682,9 +682,12 @@ export default function App() {
                       </div>
                       <div className="space-y-4">
                         <h4 className="font-bold text-heritage-earth uppercase tracking-widest text-sm">{item.title}</h4>
-                        <p className="text-heritage-earth text-sm italic leading-relaxed font-semibold">{item.desc}</p>
-                        <div className="pt-4 border-t border-heritage-gold/30">
-                          <p className="text-xs font-bold uppercase tracking-widest text-heritage-gold">{item.meta === '__FULLPRICE__' ? `${pricing.fullPrice} — Heirloom Quality` : item.meta}</p>
+                        <p className="text-heritage-earth/80 text-base leading-relaxed">{item.desc}</p>
+                        {item.price && (
+                          <p className="text-3xl font-serif font-bold text-heritage-midnight tracking-tight">{item.price}</p>
+                        )}
+                        <div className="pt-4 border-t border-heritage-gold/10">
+                          <p className="text-sm font-bold uppercase tracking-widest text-heritage-gold">{item.meta}</p>
                         </div>
                       </div>
                     </motion.div>
@@ -837,9 +840,7 @@ export default function App() {
                    </div>
                    <div className="flex-1 flex flex-col gap-4 text-center">
                       <div className="bg-heritage-earth text-heritage-gold p-8 rounded-3xl shadow-2xl border border-heritage-gold/30">
-                         <p className="text-[10px] uppercase tracking-widest opacity-60 mb-1">Full Artifact Price (ZA)</p>
-                         <p className="text-xl font-serif tracking-tight mb-4 opacity-80">{pricing.fullPrice}</p>
-                         <p className="text-[10px] uppercase tracking-widest opacity-60 mb-2">Deposit to Commence</p>
+                         <p className="text-[10px] uppercase tracking-widest opacity-60 mb-2">Commission Deposit (ZA)</p>
                          <p className="text-4xl font-bold tracking-tighter mb-6">{pricing.deposit}</p>
                          <button 
                           disabled={isSubmitting}
