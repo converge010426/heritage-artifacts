@@ -611,11 +611,7 @@ export default function App() {
                   <p className="text-heritage-midnight text-4xl md:text-5xl font-serif font-extrabold pt-4 tracking-tight">
                     HERITAGE™ transforms genealogy data into meaningful artifacts.
                   </p>
-                  <div className="pt-2">
-                    <p className="text-heritage-midnight text-xl md:text-2xl font-serif font-bold">
-                      {pricing.fullPrice}
-                    </p>
-                  </div>
+                  
                 </motion.div>
               </div>
             </div>
