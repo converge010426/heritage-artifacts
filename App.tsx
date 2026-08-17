@@ -611,11 +611,7 @@ export default function App() {
                   <p className="text-heritage-midnight text-4xl md:text-5xl font-serif font-extrabold pt-4 tracking-tight">
                     HERITAGE™ transforms genealogy data into meaningful artifacts.
                   </p>
-                  <div className="pt-2">
-                    <p className="text-heritage-midnight text-xl md:text-2xl font-serif font-bold">
-                      {pricing.fullPrice}
-                    </p>
-                  </div>
+                 
                 </motion.div>
               </div>
             </div>
@@ -819,7 +815,7 @@ export default function App() {
                    <input value={commissionData.occasion} onChange={e => setCommissionData({...commissionData, occasion: e.target.value})} placeholder="e.g. Birthday / August" className="w-full bg-transparent border-b border-heritage-gold/20 py-3 text-sm focus:border-heritage-gold outline-none" />
                  </div>
                </div>
-
+pricing.fullPrice
                <div className="pt-8 border-t border-heritage-gold/10 space-y-8">
                  <div className="flex flex-col md:flex-row justify-between gap-10">
                    <div className="space-y-4 max-w-sm">
