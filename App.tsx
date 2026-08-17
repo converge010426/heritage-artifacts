@@ -1,1216 +1,1893 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
+import React from 'react';
+import { motion } from 'motion/react';
+import { Routes, Route, useNavigate, Link, useParams, Navigate } from 'react-router-dom';
+import Support from './Support';
 
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Mail, ArrowRight, ArrowLeft, CreditCard, Printer, ExternalLink, Loader2, CheckCircle2, X, Eye, Menu, ChevronDown, Scroll, Award, History, Search, Users, Database, ShieldCheck, Globe, FileText } from 'lucide-react';
-import { supabase } from './lib/supabase';
-import { sendEmail } from './services/emailService';
-import pricingData from './data/pricing.json';
-import testimonialsData from './data/testimonials.json';
-import artifactsData from './data/artifacts.json';
-import { HERITAGE_BUSINESS } from './config/heritageBusiness';
-import { getRoyaltyStats, logPaymentAndCalculateRoyalty } from './services/royaltyService';
+
+import PrivacyPolicy from './PrivacyPolicy';
+import Terms from './Terms';
+
+
+import { questions, Question } from './questions';
+import { calculateResults, typeDescriptions, AssessmentResults, MBTIType } from './logic';
+import { ChevronRight, ChevronLeft, CheckCircle2, Download, FileText, ShieldCheck, Zap, Info, Brain, List, User, Trash2, Lock, Mail, X, Loader2, CreditCard, Heart } from 'lucide-react';
+import { PRICING, BANKING_DETAILS, SYSTEM_VERSION } from './constants';
+const Letterhead = () => (
+  <header className="bg-navy p-8 md:p-12 -mx-8 md:-mx-16 -mt-8 md:-mt-16 mb-12 flex flex-col items-center text-center border-b border-gold/20">
+    <Link to="/" className="flex flex-col items-center hover:opacity-90 transition-opacity">
+      <h1 className="font-sans font-bold text-4xl md:text-5xl tracking-[4px] text-gold uppercase mb-4 flex items-start justify-center antialiased">
+        CONVERGE<sup className="text-xs md:text-sm font-light mt-1 ml-0.5">™</sup>
+      </h1>
+      <div className="space-y-1 text-white text-sm md:text-base font-sans font-semibold leading-tight tracking-wide subpixel-antialiased opacity-95">
+        <p>Three platforms. One integrated psychological insight.</p>
+        <p>Three validated frameworks. One evidence-based hiring insight.</p>
+        <p>Three frameworks. One executive advantage.</p>
+        <p>Three developmental platforms. One transformational growth tool.</p>
+      </div>
+    </Link>
+  </header>
+);
+
+const Footer = () => (
+  <footer className="py-12 border-t border-gold/10 mt-auto">
+    <div className="flex flex-col items-center text-center space-y-3">
+      <p className="font-sans text-[10px] font-bold tracking-[3px] text-grey uppercase">
+        © {new Date().getFullYear()} CONVERGE™ • ALL RIGHTS RESERVED
+      </p>
+
+      <div className="flex items-center gap-4 font-sans text-[9px] tracking-widest uppercase">
+        <Link
+          to="/privacy"
+          className="text-grey hover:text-gold transition-colors"
+        >
+          Privacy Policy
+        </Link>
+
+        <span className="text-gold/30">•</span>
+
+        <Link
+          to="/terms"
+          className="text-grey hover:text-gold transition-colors"
+        >
+          Terms of Service
+        </Link>
+
+        <span className="text-gold/30">•</span>
+
+        <Link
+          to="/support"
+          className="text-grey hover:text-gold transition-colors"
+        >
+          Support
+        </Link>
+      </div>
+
+      <p className="font-sans text-[8px] tracking-[1px] text-grey/60 uppercase max-w-xs">
+        This assessment protocol and its integrated psychological architecture
+        are protected intellectual property.
+      </p>
+
+      <p className="font-sans text-[8px] text-gold/50 uppercase mt-4 tracking-widest">
+        System Version: {SYSTEM_VERSION}
+      </p>
+    </div>
+  </footer>
+);
+
+
+const YokoButton = () => {
+  const yokoUrl = 'https://pay.yoco.com/heritage-family-artifacts';
+  
+  return (
+    <div className="page-container p-8 md:p-16">
+      <a
+      href={yokoUrl}
+      className="w-full bg-navy text-white py-4 px-6 font-sans text-xs font-bold tracking-[3px] uppercase hover:bg-gold transition-all flex items-center justify-center gap-3 shadow-lg group text-center"
+    >
+        <CreditCard className="w-5 h-5 text-gold group-hover:text-white transition-colors" />
+        Pay Now with Yoko
+      </a>
+    </div>
+  );
+};
 
 export default function App() {
-  const [view, setView] = useState<'landing' | 'process' | 'library' | 'form' | 'questionnaire' | 'admin'>('landing');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  const [configMissing, setConfigMissing] = useState(false);
-  const [apiHealthy, setApiHealthy] = useState<boolean | null>(null);
-  const [selectedArtifact, setSelectedArtifact] = useState<null | { name: string, subject: string, img: string }>(null);
-  const [enquiryArtifact, setEnquiryArtifact] = useState<null | { name: string, subject: string }>(null);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const navigate = useNavigate();
+  const [currentQuestionIndex, setCurrentQuestionIndex] = React.useState(0);
+  const [answers, setAnswers] = React.useState<Record<number, number>>({});
+  const [userName, setUserName] = React.useState('');
+  const [userEmail, setUserEmail] = React.useState('');
+  const [selectedProduct, setSelectedProduct] = React.useState<'mbti' | 'comprehensive' | 'recruiter'>('mbti');
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  
+  // Job Context State for Converge 3
+  const [jobTitle, setJobTitle] = React.useState('');
+  const [jobEnvironment, setJobEnvironment] = React.useState('');
+  const [jobChallenge, setJobChallenge] = React.useState('');
+  const [jobDescription, setJobDescription] = React.useState('');
 
-  const scrollToSection = (id: string) => {
-    if (id === 'intro') setView('landing');
-    else if (id === 'process') setView('process');
-    setIsMenuOpen(false);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  // Dynamic Pricing State
-  const [pricing, setPricing] = useState(pricingData);
-  const [pricingDirty, setPricingDirty] = useState(false);
-
-  const fetchPricing = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('settings')
-        .select('*')
-        .eq('key', 'pricing')
-        .single();
-      
-      if (data && data.value) {
-        setPricing(data.value);
-      } else if (error) {
-        console.warn('Pricing not found in Supabase, using local fallback:', error.message);
-      }
-    } catch (err) {
-      console.error('Failed to fetch pricing:', err);
-    }
-  };
-
-  useEffect(() => {
-    fetchPricing();
+  React.useEffect(() => {
+    console.log('[Frontend] Environment Check:');
+    console.log('- VITE_SUPABASE_URL defined:', !!import.meta.env.VITE_SUPABASE_URL);
+    console.log('- VITE_SUPABASE_ANON_KEY defined:', !!import.meta.env.VITE_SUPABASE_ANON_KEY);
+    console.log('- Vercel Environment:', !!(window as any).location.hostname.includes('vercel.app'));
+    console.log('- Current Hostname:', window.location.hostname);
   }, []);
 
-  const handleUpdatePricing = async (newPricing: any) => {
+  const handleAnswer = (value: number) => {
+    const q = questions[currentQuestionIndex];
+    setAnswers(prev => ({ ...prev, [q.id]: value }));
+    
+    if (currentQuestionIndex < questions.length - 1) {
+      setCurrentQuestionIndex(prev => prev + 1);
+    }
+  };
+
+  const submitAssessment = async (jobData?: any) => {
     setIsSubmitting(true);
-    try {
-      const { error } = await supabase
-        .from('settings')
-        .upsert({ key: 'pricing', value: newPricing }, { onConflict: 'key' });
-
-      if (error) {
-        alert(
-          '\u274c Save failed: ' + error.message +
-          '\n\nCode: ' + error.code +
-          '\n\nTo fix, run this once in Supabase SQL Editor:\n' +
-          'CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value JSONB NOT NULL);\n' +
-          'ALTER TABLE settings DISABLE ROW LEVEL SECURITY;'
-        );
-        return;
+    const results = calculateResults(answers);
+    
+    // Normalize results to match the structure that we know works (Test User structure)
+    const normalizedResults = {
+      mbti: results.mbti,
+      bigFive: results.bigFive,
+      ei: results.ei,
+      scores: {
+        E: results.bigFive.extraversion,
+        O: results.bigFive.openness,
+        C: results.bigFive.conscientiousness,
+        A: results.bigFive.agreeableness,
+        S: results.bigFive.emotionalStability
       }
-
-      setPricing(newPricing);
-      setPricingDirty(false);
-      alert('\u2705 Saved! Price: ' + newPricing.fullPrice + '  |  Deposit: ' + newPricing.deposit);
-    } catch (error: any) {
-      alert('\u274c Save error: ' + error.message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // Commission Form State
-  const [commissionData, setCommissionData] = useState({
-    clientName: '',
-    clientEmail: '',
-    subjectName: '',
-    relationship: '',
-    occasion: '',
-    commissionDate: new Date().toISOString().split('T')[0]
-  });
-
-  // Questionnaire State
-  const [questionnaireData, setQuestionnaireData] = useState({
-    paternalGrandfather: '',
-    paternalGrandfatherBirthplace: '',
-    paternalGrandmother: '',
-    paternalGrandmotherMaidenName: '',
-    maternalGrandfather: '',
-    maternalGrandfatherBirthplace: '',
-    maternalGrandmother: '',
-    maternalGrandmotherMaidenName: '',
-    extraGenerations: '',
-    narratives: '',
-    researchObjectives: '',
-    themeColor: '',
-    nationality: '',
-    motto: ''
-  });
-
-  const [promoCode, setPromoCode] = useState('');
-  const [isPromoApplied, setIsPromoApplied] = useState(false);
-
-  const [enquiryMessage, setEnquiryMessage] = useState('');
-  const [enquiryEmail, setEnquiryEmail] = useState('');
-  const [enquiryStatus, setEnquiryStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
-  const [adminPassword, setAdminPassword] = useState('');
-  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
-  const [royaltyStats, setRoyaltyStats] = useState<{ monthTotal: number, ytdTotal: number } | null>(null);
-  const [recentCommissions, setRecentCommissions] = useState<any[]>([]);
-  const [recentQuestionnaires, setRecentQuestionnaires] = useState<any[]>([]);
-
-  const fetchAdminData = async () => {
-    try {
-      const stats = await getRoyaltyStats();
-      setRoyaltyStats(stats);
-
-      const commissionsRes = await supabase
-        .from('commissions')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(10);
-      
-      setRecentCommissions(commissionsRes.data || []);
-
-      const questionnairesRes = await supabase
-        .from('questionnaires')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(10);
-
-      setRecentQuestionnaires(questionnairesRes.data || []);
-    } catch (error) {
-      console.error('Failed to fetch admin data:', error);
-    }
-  };
-
-  const handleAdminLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (adminPassword === HERITAGE_BUSINESS.security.dashboardKey) {
-      setIsAdminAuthenticated(true);
-      fetchAdminData();
-    } else {
-      alert('Invalid Business Key');
-    }
-  };
-
-  const handleLogFinalPayment = async (commission: any) => {
-    if (commission.final_payment_logged) return;
-
-    const fullPrice = parseInt(pricing.fullPrice.replace(/[^0-9]/g, '')) || 0;
-    const deposit = parseInt(pricing.deposit.replace(/[^0-9]/g, '')) || 0;
-    const balance = fullPrice - deposit;
-
-    if (balance <= 0) {
-      alert('No balance remaining to log.');
-      return;
-    }
-
-    if (!confirm(`Log final payment of R${balance} for ${commission.client_name}? This will record a royalty of R${balance * HERITAGE_BUSINESS.royalty.percentage}.`)) {
-      return;
-    }
-
-    try {
-      setIsSubmitting(true);
-      // 1. Log the payment
-      await logPaymentAndCalculateRoyalty(balance, commission.client_email);
-
-      // 2. Update commission status
-      const { error } = await supabase
-        .from('commissions')
-        .update({ final_payment_logged: true, status: 'fully_paid' })
-        .eq('id', commission.id);
-
-      if (error) throw error;
-
-      alert('Final payment logged and royalty recorded.');
-      fetchAdminData(); // Refresh stats
-    } catch (error) {
-      console.error('Failed to log final payment:', error);
-      alert('Error logging payment. Please try again.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleEnquirySubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!enquiryArtifact || !enquiryEmail) return;
-
-    setEnquiryStatus('sending');
-    try {
-      await sendEmail({
-        to: HERITAGE_BUSINESS.owner.email,
-        subject: `New Enquiry: ${enquiryArtifact.name} Artifact`,
-        html: `
-          <div style="font-family: sans-serif; padding: 20px; color: #1a110a;">
-            <h2 style="color: #c5a059;">Artifact Enquiry</h2>
-            <p><strong>Artifact:</strong> ${enquiryArtifact.name}</p>
-            <p><strong>Subject:</strong> ${enquiryArtifact.subject}</p>
-            <p><strong>From:</strong> ${enquiryEmail}</p>
-            <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
-            <p style="white-space: pre-wrap;">${enquiryMessage}</p>
-          </div>
-        `
-      });
-      setEnquiryStatus('success');
-      setTimeout(() => {
-        setEnquiryArtifact(null);
-        setEnquiryStatus('idle');
-        setEnquiryMessage('');
-        setEnquiryEmail('');
-      }, 2000);
-    } catch (error) {
-      console.error('Enquiry failed:', error);
-      setEnquiryStatus('error');
-    }
-  };
-
-  const handleCommissionSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!commissionData.clientEmail || !commissionData.clientName) {
-      alert('Please fill in required fields (Name and Email)');
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      console.log('Submitting commission for:', commissionData.clientEmail);
-      const { error } = await supabase
-        .from('commissions')
-        .insert([{ 
-          client_name: commissionData.clientName,
-          client_email: commissionData.clientEmail,
-          artifact_subject: commissionData.subjectName,
-          relationship: commissionData.relationship,
-          occasion: commissionData.occasion,
-          status: 'pending_payment',
-          created_at: new Date().toISOString()
-        }]);
-
-      if (error) {
-        console.error('Supabase Insert Error:', error);
-        alert(`Database Error: ${error.message}. Please ensure the 'commissions' table exists in Supabase.`);
-        throw error;
-      }
-
-      // Log Royalty Payment (using deposit amount)
-      const depositAmount = parseInt(pricing.deposit.replace(/[^0-9]/g, '')) || 0;
-      await logPaymentAndCalculateRoyalty(depositAmount, commissionData.clientEmail);
-      
-      // Send Confirmation Email
-      console.log('Sending confirmation email...');
-      const emailResult = await sendEmail({ 
-        to: commissionData.clientEmail, 
-        type: 'commission', 
-        clientName: commissionData.clientName 
-      });
-      console.log('Email result:', emailResult);
-      
-      setSubmitStatus('success');
-      setTimeout(() => {
-        setSubmitStatus('idle');
-        setView('questionnaire');
-      }, 2000);
-    } catch (error: any) {
-      console.error('Error submitting commission:', error);
-      setSubmitStatus('error');
-      if (!error.message?.includes('Database Error')) {
-        alert(`Error submitting form: ${error.message || 'Unknown error'}. Please try again.`);
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleQuestionnaireSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!commissionData.clientEmail) {
-      alert('Please complete the Commission Form first to provide your email address.');
-      setView('form');
-      return;
-    }
-    setIsSubmitting(true);
-    setSubmitStatus('idle');
-    try {
-      console.log('Submitting questionnaire for:', commissionData.clientEmail);
-      const { error } = await supabase
-        .from('questionnaires')
-        .insert([{ 
-          client_email: commissionData.clientEmail,
-          data: questionnaireData,
-          created_at: new Date().toISOString()
-        }]);
-
-      if (error) {
-        console.error('Supabase Questionnaire Error:', error);
-        alert(`Database Error: ${error.message}. Please ensure the 'questionnaires' table exists in Supabase.`);
-        throw error;
-      }
-      
-      // Send Questionnaire Received Email
-      console.log('Sending questionnaire email...');
-      const emailResult = await sendEmail({ 
-        to: commissionData.clientEmail, 
-        type: 'questionnaire', 
-        clientName: commissionData.clientName 
-      });
-      console.log('Email result:', emailResult);
-      
-      setSubmitStatus('success');
-      alert('Questionnaire submitted successfully! We will begin our research shortly.');
-    } catch (error: any) {
-      console.error('Error submitting questionnaire:', error);
-      setSubmitStatus('error');
-      if (!error.message?.includes('Database Error')) {
-        alert(`Error submitting questionnaire: ${error.message || 'Unknown error'}. Please try again.`);
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handlePrint = () => {
-    window.focus();
-    setTimeout(() => {
-      window.print();
-    }, 200);
-  };
-
-  const [clickCount, setClickCount] = useState(0);
-  const handleCopyrightClick = () => {
-    setClickCount(prev => {
-      const next = prev + 1;
-      if (next >= 5) {
-        setView('admin');
-        return 0;
-      }
-      return next;
+    };
+    
+    console.log('[Frontend] Submitting assessment:', {
+      name: userName,
+      email: userEmail,
+      product: selectedProduct,
+      answersCount: Object.keys(answers).length,
+      mbti: results.mbti,
+      jobData
     });
+    
+    try {
+      const response = await fetch('/api/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: userName,
+          email: userEmail,
+          answers,
+          results: normalizedResults,
+          product: selectedProduct,
+          ...jobData
+        })
+      });
+      
+      console.log('[Frontend] Submission response status:', response.status);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('[Frontend] Submission successful:', data);
+        
+        // Store in local history for debugging
+        const history = JSON.parse(localStorage.getItem('submission_history') || '[]');
+        history.unshift({
+          id: data.id,
+          timestamp: new Date().toISOString(),
+          name: userName,
+          email: userEmail
+        });
+        localStorage.setItem('submission_history', JSON.stringify(history.slice(0, 5)));
+        
+        if (data.id) localStorage.setItem('last_submission_id', data.id);
+        localStorage.setItem('last_product', selectedProduct);
+        navigate('/thank-you');
+      } else {
+        let errorMessage = 'There was an error submitting your assessment. Please try again.';
+        let errorDetails = '';
+        let rawBody = '';
+        
+        try {
+          rawBody = await response.text();
+          const errorData = JSON.parse(rawBody);
+          errorMessage = errorData.message || errorMessage;
+          errorDetails = errorData.details || JSON.stringify(errorData);
+        } catch (e) {
+          errorMessage = `Server Error (${response.status}): ${response.statusText || 'Unknown error'}`;
+          errorDetails = rawBody || 'No additional details available.';
+        }
+        
+        console.error('[Frontend] Submission failed:', errorMessage, errorDetails);
+        alert(`SUBMISSION FAILED (${SYSTEM_VERSION})\n\nError: ${errorMessage}\n\nDetails: ${errorDetails.substring(0, 500)}${errorDetails.length > 500 ? '...' : ''}\n\nPlease take a screenshot of this and send it to me.`);
+      }
+    } catch (error: any) {
+      console.error('[Frontend] Network error during submission:', error);
+      alert(`Network error: ${error.message || 'Please check your connection.'}`);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
+  const progress = ((currentQuestionIndex + 1) / questions.length) * 100;
   return (
-    <div className="min-h-screen bg-heritage-biscuit selection:bg-heritage-gold selection:text-heritage-earth">
-      {/* Navigation Bar */}
-      <nav className="no-print fixed top-0 left-0 right-0 z-[100] bg-heritage-earth/95 backdrop-blur-md border-b border-heritage-gold/20 h-16 flex items-center px-6">
-        <div className="max-w-7xl mx-auto w-full flex items-center justify-between">
-          <div 
-            onClick={() => scrollToSection('intro')}
-            className="flex items-center gap-3 cursor-pointer group"
-          >
-            <div className="w-8 h-8 bg-heritage-gold rounded-sm flex items-center justify-center text-heritage-earth font-serif font-bold text-xl group-hover:scale-110 transition-transform">{HERITAGE_BUSINESS.branding.name.charAt(0)}</div>
-            <span className="text-heritage-gold font-sans font-bold tracking-[4px] text-xs uppercase hidden sm:block">{HERITAGE_BUSINESS.branding.name}</span>
-          </div>
+   
+ <Routes>
+       <Route path="/privacy" element={<PrivacyPolicy />} />
+       <Route path="/terms" element={<Terms />} />
+       <Route path="/support" element={<Support />} />
 
-          {/* Desktop Menu */}
-          <div className="hidden md:flex items-center gap-8">
-            <button 
-              onClick={() => scrollToSection('intro')} 
-              className={`text-[10px] uppercase tracking-widest font-bold transition-colors cursor-pointer ${view === 'landing' ? 'text-heritage-gold underline underline-offset-4' : 'text-heritage-gold/70 hover:text-heritage-gold'}`}
-            >
-              Introduction
-            </button>
-            <button 
-              onClick={() => scrollToSection('process')} 
-              className={`text-[10px] uppercase tracking-widest font-bold transition-colors cursor-pointer ${view === 'process' ? 'text-heritage-gold underline underline-offset-4' : 'text-heritage-gold/70 hover:text-heritage-gold'}`}
-            >
-              The Process
-            </button>
-            <button 
-              onClick={() => setView('library')} 
-              className={`text-[10px] uppercase tracking-widest font-bold transition-colors cursor-pointer ${view === 'library' ? 'text-heritage-gold underline underline-offset-4' : 'text-heritage-gold/70 hover:text-heritage-gold'}`}
-            >
-              Library
-            </button>
-            <button 
-              onClick={() => setView('form')}
-              className={`px-5 py-2 rounded-full text-[10px] uppercase tracking-widest font-bold transition-all cursor-pointer ${view === 'form' ? 'bg-heritage-gold text-heritage-earth scale-105' : 'bg-heritage-gold/20 text-heritage-gold hover:bg-heritage-gold hover:text-heritage-earth'}`}
-            >
-              Commission
-            </button>
-          </div>
-
-          {/* Mobile Menu Toggle */}
-          <button 
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="md:hidden text-heritage-gold p-2 cursor-pointer"
-          >
-            {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
-          </button>
-        </div>
-
-        {/* Mobile Menu Overlay */}
-        <AnimatePresence>
-          {isMenuOpen && (
+  <Route path="/" element={
+        <div className="page-container p-8 md:p-16">
+          <img
+            src="/converge-hero.png"
+            alt="CONVERGE — Three Frameworks. One You."
+            className="w-full h-auto block mb-12"
+          />
+          <main className="flex-1 py-12">
             <motion.div 
-              initial={{ opacity: 0, y: -20 }}
+              initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="absolute top-16 left-0 right-0 bg-heritage-earth border-b border-heritage-gold/20 p-6 flex flex-col gap-6 md:hidden"
+              className="mb-16 max-w-3xl"
             >
-              <button onClick={() => scrollToSection('intro')} className="text-heritage-gold text-sm uppercase tracking-widest font-bold text-left">Introduction</button>
-              <button onClick={() => scrollToSection('process')} className="text-heritage-gold text-sm uppercase tracking-widest font-bold text-left">The Process</button>
-              <button 
-                onClick={() => {
-                  setView('library');
-                  setIsMenuOpen(false);
-                }} 
-                className="text-heritage-gold text-sm uppercase tracking-widest font-bold text-left"
-              >
-                Library
-              </button>
-              <button 
-                onClick={() => {
-                  setView('form');
-                  setIsMenuOpen(false);
-                }}
-                className="w-full py-3 bg-heritage-gold text-heritage-earth rounded-full text-sm uppercase tracking-widest font-bold"
-              >
-                Commission
-              </button>
+              <h2 className="font-sans text-2xl md:text-3xl font-bold text-navy leading-snug mb-4 antialiased">
+                A verified psychological architecture, built from three validated frameworks.
+              </h2>
+              <p className="text-base leading-relaxed text-grey">
+                <strong className="text-dark">CONVERGE<sup>™</sup></strong> integrates MBTI, IPIP Big Five, and Emotional Intelligence assessment into a single, evidence-based profile — whether you're exploring your own personality, or evaluating fit for a role.
+              </p>
             </motion.div>
-          )}
-        </AnimatePresence>
-      </nav>
 
-      <div className="pt-16">
-        {/* Artifact Preview Modal */}
-      {selectedArtifact && (
-        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 md:p-8">
-          <div 
-            className="absolute inset-0 bg-heritage-earth/95 backdrop-blur-md"
-            onClick={() => setSelectedArtifact(null)}
-          ></div>
-          <div className="relative w-full max-w-4xl bg-heritage-biscuit rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border-4 border-heritage-gold/30">
-            <div className="p-4 border-b border-black/10 flex items-center justify-between bg-white/50">
-              <div>
-                <h3 className="font-bold uppercase tracking-widest text-sm">{selectedArtifact.name}</h3>
-                <p className="text-[10px] italic opacity-70">Front Page Preview • {selectedArtifact.subject}</p>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-16"
+            >
+              <h2 className="section-label mb-6">Three Validated Frameworks</h2>
+              <div className="grid md:grid-cols-3 gap-6">
+                <div className="p-6 bg-white border border-blue-100 border-t-4 border-t-blue-500">
+                  <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mb-4">
+                    <Brain className="w-5 h-5" />
+                  </div>
+                  <h3 className="font-sans font-bold text-navy uppercase tracking-wide text-sm mb-2">MBTI</h3>
+                  <p className="text-sm text-grey leading-relaxed">
+                    Myers-Briggs typology based on Carl Jung's model — how you perceive the world and make decisions, expressed as one of sixteen personality types.
+                  </p>
+                </div>
+                <div className="p-6 bg-white border border-purple-100 border-t-4 border-t-purple-500">
+                  <div className="w-10 h-10 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center mb-4">
+                    <List className="w-5 h-5" />
+                  </div>
+                  <h3 className="font-sans font-bold text-navy uppercase tracking-wide text-sm mb-2">IPIP Big Five</h3>
+                  <p className="text-sm text-grey leading-relaxed">
+                    A research-grounded model of personality across five core traits, offering a broader, more nuanced dimension than type alone.
+                  </p>
+                </div>
+                <div className="p-6 bg-white border border-emerald-100 border-t-4 border-t-emerald-500">
+                  <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mb-4">
+                    <Heart className="w-5 h-5" />
+                  </div>
+                  <h3 className="font-sans font-bold text-navy uppercase tracking-wide text-sm mb-2">Emotional Intelligence</h3>
+                  <p className="text-sm text-grey leading-relaxed">
+                    How you recognise, understand, and manage emotion — in yourself and with others — a strong predictor of real-world performance.
+                  </p>
+                </div>
               </div>
-              <button 
-                onClick={() => setSelectedArtifact(null)}
-                className="p-2 hover:bg-black/5 rounded-full transition-colors cursor-pointer"
-              >
-                <X size={24} />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-black/5 flex justify-center relative group/preview">
-              <div className="relative shadow-2xl border border-black/10 max-w-full">
-                <img 
-                  src={selectedArtifact.img} 
-                  alt={selectedArtifact.name}
-                  className="max-w-full h-auto block"
-                  onError={(e) => {
-                    e.currentTarget.src = 'https://picsum.photos/seed/heritage/800/1200?blur=2';
-                  }}
-                />
-                <div className="absolute inset-0 pointer-events-none border-[20px] border-white/5 mix-blend-overlay"></div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-16 grid sm:grid-cols-3 gap-6 max-w-4xl"
+            >
+              <div>
+                <p className="font-sans font-black text-navy text-2xl mb-1">24 hrs</p>
+                <p className="text-xs text-grey uppercase tracking-wide font-bold">Report delivered by email</p>
+              </div>
+              <div>
+                <p className="font-sans font-black text-navy text-2xl mb-1">3</p>
+                <p className="text-xs text-grey uppercase tracking-wide font-bold">Validated frameworks, one profile</p>
+              </div>
+              <div>
+                <p className="font-sans font-black text-navy text-2xl mb-1">ZAR</p>
+                <p className="text-xs text-grey uppercase tracking-wide font-bold">Priced for individuals and teams</p>
+              </div>
+            </motion.div>
+
+            <div className="space-y-12 max-w-6xl">
+              <section>
+                <h2 className="section-label mb-6">Select Assessment Product</h2>
+                <div className="grid md:grid-cols-3 gap-6">
+                  <button 
+                    onClick={() => setSelectedProduct('mbti')}
+                    className={`p-6 border text-left transition-all relative flex flex-col justify-between ${selectedProduct === 'mbti' ? 'bg-blue-600 text-white border-blue-600 shadow-xl scale-[1.02]' : 'bg-white text-dark border-blue-100 hover:border-blue-400'}`}
+                  >
+                    <div>
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`p-2 rounded-full ${selectedProduct === 'mbti' ? 'bg-white text-blue-600' : 'bg-blue-50 text-blue-600'}`}>
+                            <Brain className="w-6 h-6" />
+                          </div>
+                          <span className={`text-[10px] font-bold uppercase tracking-widest ${selectedProduct === 'mbti' ? 'text-white/90' : 'text-blue-600'}`}>
+                            Individual
+                          </span>
+                        </div>
+                        {selectedProduct === 'mbti' && <CheckCircle2 className="w-6 h-6 text-white" />}
+                      </div>
+                      <h3 className="text-xl font-bold mb-2">MBTI Basic</h3>
+                      <p className={`text-sm mb-6 ${selectedProduct === 'mbti' ? 'text-white/80' : 'text-grey'}`}>
+                        {PRICING.products.mbti.description}
+                      </p>
+                    </div>
+                    <div className="flex justify-end items-end mt-auto">
+                      <div className="text-right">
+                        <span className="text-4xl font-black leading-none">{PRICING.products.mbti.price}</span>
+                      </div>
+                    </div>
+                  </button>
+
+                  <button 
+                    onClick={() => setSelectedProduct('comprehensive')}
+                    className={`p-6 border text-left transition-all relative flex flex-col justify-between ${selectedProduct === 'comprehensive' ? 'bg-purple-600 text-white border-purple-600 shadow-xl scale-[1.02]' : 'bg-white text-dark border-purple-100 hover:border-purple-400'}`}
+                  >
+                    <div>
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`p-2 rounded-full ${selectedProduct === 'comprehensive' ? 'bg-white text-purple-600' : 'bg-purple-50 text-purple-600'}`}>
+                            <Zap className="w-6 h-6" />
+                          </div>
+                          <span className={`text-[10px] font-bold uppercase tracking-widest ${selectedProduct === 'comprehensive' ? 'text-white/90' : 'text-purple-600'}`}>
+                            Individual
+                          </span>
+                        </div>
+                        {selectedProduct === 'comprehensive' && <CheckCircle2 className="w-6 h-6 text-white" />}
+                      </div>
+                      <h3 className="text-xl font-bold mb-2">Comprehensive</h3>
+                      <p className={`text-sm mb-6 ${selectedProduct === 'comprehensive' ? 'text-white/80' : 'text-grey'}`}>
+                        {PRICING.products.comprehensive.description}
+                      </p>
+                    </div>
+                    <div className="flex justify-end items-end mt-auto">
+                      <div className="text-right">
+                        <span className="text-4xl font-black leading-none">{PRICING.products.comprehensive.price}</span>
+                      </div>
+                    </div>
+                  </button>
+
+                  <button 
+                    onClick={() => setSelectedProduct('recruiter')}
+                    className={`p-7 border-2 text-left transition-all relative flex flex-col justify-between shadow-lg ${selectedProduct === 'recruiter' ? 'bg-emerald-700 text-white border-emerald-700 shadow-2xl scale-[1.02]' : 'bg-emerald-50/40 text-dark border-emerald-200 hover:border-emerald-500'}`}
+                  >
+                    <div>
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`p-2 rounded-full ${selectedProduct === 'recruiter' ? 'bg-white text-emerald-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                            <ShieldCheck className="w-6 h-6" />
+                          </div>
+                          <span className={`text-[10px] font-bold uppercase tracking-widest ${selectedProduct === 'recruiter' ? 'text-white/90' : 'text-emerald-700'}`}>
+                            Recruiter
+                          </span>
+                        </div>
+                        {selectedProduct === 'recruiter' && <CheckCircle2 className="w-6 h-6 text-white" />}
+                      </div>
+                      <h3 className="text-xl font-bold mb-2">Recruiter All-in</h3>
+                      <p className={`text-sm mb-6 ${selectedProduct === 'recruiter' ? 'text-white/80' : 'text-grey'}`}>
+                        {PRICING.products.recruiter.description}
+                      </p>
+                    </div>
+                    <div className="flex justify-end items-end mt-auto">
+                      <div className="text-right">
+                        <span className="text-4xl font-black leading-none">{PRICING.products.recruiter.price}</span>
+                      </div>
+                    </div>
+                  </button>
+                </div>
+                <p className="text-[9px] text-grey font-bold uppercase tracking-widest text-center mt-6 opacity-70">
+                  {PRICING.disclaimer}
+                </p>
+              </section>
+
+              <section className="bg-white border border-gold/20 shadow-xl overflow-hidden">
+                <div className="bg-navy p-4 text-center border-b border-gold/30">
+                  <h2 className="text-gold font-sans font-black tracking-[4px] uppercase text-sm">Payment Information</h2>
+                </div>
                 
-                {/* Sample Watermark */}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden">
-                  <div className="text-heritage-gold/10 text-[15vw] font-bold uppercase tracking-[2em] -rotate-45 whitespace-nowrap select-none">
-                    SAMPLE
+                <div className="p-0 overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-gold/10">
+                        <th className="p-6 text-[10px] font-black text-grey uppercase tracking-[2px]">Product Tier</th>
+                        <th className="p-6 text-[10px] font-black text-navy uppercase tracking-[2px]">Fee ({PRICING.currency})</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-dark font-bold">
+                      <tr className="border-b border-gold/5 hover:bg-gold/5 transition-colors">
+                        <td className="p-6 text-sm">{PRICING.products.mbti.name}</td>
+                        <td className="p-6 text-sm text-navy">{PRICING.products.mbti.price}</td>
+                      </tr>
+                      <tr className="border-b border-gold/5 hover:bg-gold/5 transition-colors">
+                        <td className="p-6 text-sm">{PRICING.products.comprehensive.name}</td>
+                        <td className="p-6 text-sm text-navy">{PRICING.products.comprehensive.price}</td>
+                      </tr>
+                      <tr className="hover:bg-gold/5 transition-colors">
+                        <td className="p-6 text-sm">{PRICING.products.recruiter.name}</td>
+                        <td className="p-6 text-sm text-navy">{PRICING.products.recruiter.price}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="p-8 bg-warm/30 border-t border-gold/10">
+                  
+<p className="text-[10px] text-navy font-black italic text-center mb-6 tracking-wide">
+  {PRICING.paymentNote}
+</p>
+
+<div className="text-center mb-8 px-4">
+  <h3 className="text-navy font-sans font-black tracking-[3px] uppercase text-[11px] mb-3">
+    Why is CONVERGE so accessible?
+  </h3>
+  
+<p className="text-[12px] text-navy font-medium leading-relaxed max-w-xl mx-auto">
+ 
+
+
+ CONVERGE is currently offered at special introductory marketplace pricing
+    while we build our client community. We believe these integrated
+    assessments can add meaningful value to personal relationships, workplace
+    relationships, recruitment and career decisions. Our aim is to make that
+    value accessible while introducing CONVERGE to the market.
+  </p>
+</div>
+
+<div className="flex flex-col items-center">
+  <h3 className="text-navy font-sans font-black tracking-[3px] uppercase text-[13px] mb-6 border-b-2 border-gold pb-2">
+    PAY WITH EFT
+  </h3>
+
+  <h3 className="text-navy font-sans font-black tracking-[3px] uppercase text-[11px] mb-6 border-b border-gold/30 pb-2">
+    Banking Details ({PRICING.currency})
+  </h3>
+
+                    
+
+
+<div className="grid grid-cols-2 gap-x-12 gap-y-4 max-w-md w-full">
+                      <div className="text-right">
+                        <span className="text-[9px] text-grey font-black uppercase tracking-widest block mb-1">Bank</span>
+                        <span className="text-sm font-black text-navy">{BANKING_DETAILS.bank}</span>
+                      </div>
+                      <div className="text-left">
+                        <span className="text-[9px] text-grey font-black uppercase tracking-widest block mb-1">Account Holder</span>
+                        <span className="text-sm font-black text-navy">{BANKING_DETAILS.accountHolder}</span>
+
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[9px] text-grey font-black uppercase tracking-widest block mb-1">Account Number</span>
+                        <span className="text-sm font-black text-dark">{BANKING_DETAILS.accountNumber}</span>
+                      </div>
+                      <div className="text-left">
+                        <span className="text-[9px] text-grey font-black uppercase tracking-widest block mb-1">Branch Code</span>
+                        <span className="text-sm font-black text-dark">{BANKING_DETAILS.branchCode}</span>
+                      </div>
+                    </div>
+                
+ <p className="text-[10px] text-gold font-black uppercase tracking-[2px] mt-8 bg-navy px-4 py-2 rounded">
+                
+
+
+
+
+      Reference: {BANKING_DETAILS.reference}
+                    </p>
                   </div>
                 </div>
-              </div>
-            </div>
-            <div className="p-6 bg-heritage-earth text-heritage-gold text-center space-y-3">
-              <p className="text-xs italic opacity-90 max-w-2xl mx-auto">
-                "This preview represents the quality and narrative depth of our bespoke artifacts. The full document contains verified lineages, historical context, and personal tributes."
-              </p>
-              <div className="flex justify-center gap-4 pt-2">
-                <button 
-                  onClick={() => setSelectedArtifact(null)}
-                  className="px-6 py-2 border border-heritage-gold/30 rounded-full text-[10px] uppercase tracking-widest hover:bg-heritage-gold/10 transition-colors cursor-pointer"
-                >
-                  Close Preview
-                </button>
-                <button 
-                  onClick={() => {
-                    setEnquiryArtifact(selectedArtifact);
-                    setSelectedArtifact(null);
-                  }}
-                  className="px-6 py-2 bg-heritage-earth text-heritage-gold rounded-full text-[10px] uppercase tracking-widest font-bold hover:scale-105 transition-transform cursor-pointer"
-                >
-                  Enquire about this
-                </button>
-                <button 
-                  onClick={() => {
-                    setSelectedArtifact(null);
-                    setView('form');
-                  }}
-                  className="px-6 py-2 bg-heritage-gold text-heritage-earth rounded-full text-[10px] uppercase tracking-widest font-bold hover:scale-105 transition-transform cursor-pointer"
-                >
-                  Commission Your Own
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+              </section>
 
-      {/* Enquiry Modal */}
-      {enquiryArtifact && (
-        <div className="fixed inset-0 z-[20000] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-heritage-earth/95 backdrop-blur-md" onClick={() => setEnquiryArtifact(null)}></div>
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="relative w-full max-w-md bg-heritage-biscuit rounded-xl shadow-2xl overflow-hidden border border-heritage-gold/30"
-          >
-            <div className="p-6 space-y-4">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="font-bold uppercase tracking-widest text-sm">Enquire about Artifact</h3>
-                  <p className="text-[10px] italic opacity-70">{enquiryArtifact.name} • {enquiryArtifact.subject}</p>
-                </div>
-                <button onClick={() => setEnquiryArtifact(null)} className="p-1 hover:bg-black/5 rounded-full transition-colors"><X size={20} /></button>
-              </div>
+              <div className="grid md:grid-cols-2 gap-12">
+                <section>
+                  <h2 className="section-label">Instructions</h2>
+                  <ul className="space-y-4 text-dark font-bold">
+                    <li className="flex gap-3">
+                      <span className="text-gold font-bold">01</span>
+                      <p>60 easy multiple-choice questions — less than 10 minutes.</p>
+                    </li>
+                    <li className="flex gap-3">
+                      <span className="text-gold font-bold">02</span>
+                      <p>Answer honestly based on your natural tendencies, not how you think you should behave.</p>
+                    </li>
+                    <li className="flex gap-3">
+                      <span className="text-gold font-bold">03</span>
+                      <p>Try to avoid 'Neutral' answers where possible to ensure a more precise profile.</p>
+                    </li>
+                    <li className="flex gap-3">
+                      <span className="text-gold font-bold">04</span>
+                      <p>Answer instinctively. Go with your first response — don't overthink or search for the "best" answer.</p>
+                    </li>
+                  </ul>
+                </section>
 
-              {enquiryStatus === 'success' ? (
-                <div className="py-12 text-center space-y-4">
-                  <CheckCircle2 className="mx-auto text-green-600" size={48} />
-                  <p className="font-bold uppercase tracking-widest text-xs">Enquiry Sent Successfully</p>
-                  <p className="text-[10px] italic opacity-70">Tommy will be in touch shortly.</p>
-                </div>
-              ) : (
-                <form onSubmit={handleEnquirySubmit} className="space-y-4">
-                  <div className="space-y-1">
-                    <label className="block text-[10px] font-bold uppercase tracking-wider">Your Email Address:</label>
+                <section className="space-y-6">
+                  <div>
+                    <label className="block font-sans text-[10px] font-bold tracking-[2px] text-grey uppercase mb-3">Candidate Name</label>
                     <input 
-                      required
-                      type="email"
-                      value={enquiryEmail}
-                      onChange={(e) => setEnquiryEmail(e.target.value)}
-                      className="w-full bg-transparent border-b border-black/20 focus:border-black outline-none py-1 text-xs"
-                      placeholder="email@example.com"
+                      type="text" 
+                      value={userName}
+                      onChange={(e) => setUserName(e.target.value)}
+                      placeholder="Enter your full name"
+                      className="w-full p-4 bg-cream border border-gold/20 focus:border-gold outline-none font-sans font-black transition-colors"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <label className="block text-[10px] font-bold uppercase tracking-wider">Your Message:</label>
-                    <textarea 
-                      required
-                      value={enquiryMessage}
-                      onChange={(e) => setEnquiryMessage(e.target.value)}
-                      className="w-full bg-transparent border border-black/10 rounded p-2 focus:border-black outline-none text-xs h-32 resize-none"
-                      placeholder="I am also a relative of the Lupini family and would like to connect..."
+                  <div>
+                    <label className="block font-sans text-[10px] font-bold tracking-[2px] text-grey uppercase mb-3">Email Address</label>
+                    <input 
+                      type="email" 
+                      value={userEmail}
+                      onChange={(e) => setUserEmail(e.target.value)}
+                      placeholder="Enter your email address"
+                      className="w-full p-4 bg-cream border border-gold/20 focus:border-gold outline-none font-sans font-black transition-colors"
                     />
                   </div>
                   <button 
-                    type="submit"
-                    disabled={enquiryStatus === 'sending'}
-                    className="w-full py-3 bg-heritage-gold text-heritage-earth rounded-full text-[10px] uppercase tracking-widest font-bold hover:scale-[1.02] transition-transform disabled:opacity-50"
+                    onClick={() => navigate('/quiz')}
+                    disabled={!userName || !userEmail}
+                    className="w-full group flex items-center justify-center gap-3 bg-navy text-white px-8 py-4 font-sans text-xs font-bold tracking-[3px] uppercase hover:bg-navy/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {enquiryStatus === 'sending' ? 'Sending...' : 'Send Enquiry'}
+                    Begin Assessment
+                    <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </button>
-                </form>
-              )}
-            </div>
-          </motion.div>
-        </div>
-      )}
-
-      {configMissing && (
-        <div className="no-print fixed bottom-4 left-4 z-[9999] bg-red-900 text-white px-4 py-2 rounded-lg shadow-2xl border border-red-700 text-xs font-sans animate-pulse">
-          ⚠️ Supabase Configuration Missing. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.
-        </div>
-      )}
-
-      <div className={`${view === 'landing' ? 'flex print:flex' : 'hidden'} flex-col heritage-export-page`}>
-        <div id="heritage-protocol-view" className="relative flex-1 flex flex-col bg-heritage-biscuit min-h-screen">
-          {/* Header Banner */}
-          <div className="w-full border-b-4 border-heritage-gold z-10">
-            <img 
-              src="/heritage-banner.png" 
-              alt="Heritage Banner" 
-              className="w-full h-auto block"
-            />
-          </div>
-
-          {/* Introduction Section */}
-          <section className="flex-1 flex flex-col items-center pt-12 pb-12 print:pt-4 print:pb-8">
-            <div className="px-6 flex items-center justify-center">
-              <div className="max-w-4xl text-center space-y-8">
-                <motion.div 
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="space-y-6"
-                >
-                  <p className="text-heritage-midnight text-2xl md:text-3xl font-serif leading-relaxed italic">
-                    Family history shouldn't be trapped in databases that can't capture the essence of who people were.
-                  </p>
-                  <p className="text-heritage-midnight text-2xl md:text-3xl font-serif leading-relaxed italic">
-                    Heritage documents should be living tributes — beautiful, personal, and unforgettable.
-                  </p>
-                  <p className="text-heritage-midnight text-4xl md:text-5xl font-serif font-extrabold pt-4 tracking-tight">
-                    HERITAGE™ transforms genealogy data into meaningful artifacts.
-                  </p>
-                 
-                </motion.div>
+                </section>
               </div>
             </div>
+          </main>
+          <Footer />
+        </div>
+      } />
 
-            {/* Signature Section */}
-            <div className="w-full px-6 flex flex-col items-center mt-12 print-avoid-break">
-              <div className="bg-heritage-earth text-heritage-gold px-10 py-8 rounded-xl shadow-2xl max-w-4xl text-center border border-heritage-gold/40 space-y-4">
-                <p className="text-lg md:text-2xl font-serif leading-relaxed italic">
-                  "This Heritage artifact was designed, narrated, and compiled by {HERITAGE_BUSINESS.owner.name}, with profound respect for, and a deep appreciation of, Heritage and Genealogy."
-                </p>
-                <div className="pt-3 border-t border-heritage-gold/20">
-                  <p className="text-heritage-gold font-sans text-xs md:text-sm uppercase tracking-[8px] font-bold">
-                    {HERITAGE_BUSINESS.owner.email}
-                  </p>
-                </div>
+      <Route path="/quiz" element={
+        <div className="page-container p-8 md:p-16 bg-cream">
+          <Letterhead />
+          <div className="mb-12">
+            <div className="flex justify-end items-center mb-6">
+              <div className="text-right">
+                <h2 className="font-sans text-[10px] font-bold tracking-[4px] text-gold uppercase">Question {currentQuestionIndex + 1} of {questions.length}</h2>
+                <span className="font-sans text-[10px] text-grey font-bold tracking-wider">{Math.round(progress)}% Complete</span>
               </div>
             </div>
-          </section>
-
-          {/* Footer */}
-          <footer className="bg-heritage-earth py-4 px-6 border-t border-heritage-gold/20 text-center">
-            <div className="max-w-4xl mx-auto space-y-1">
-              <p className="text-heritage-gold/60 font-sans text-[8px] md:text-[9px] uppercase tracking-[3px] leading-relaxed">
-                {HERITAGE_BUSINESS.branding.name} is a proprietary intellectual property. Unauthorized reproduction, distribution, or commercial use is strictly prohibited.
-              </p>
-              <p 
-                onClick={handleCopyrightClick}
-                className="text-heritage-gold font-bold font-sans text-[8px] md:text-[9px] uppercase tracking-[1px] cursor-pointer select-none"
-              >
-                {HERITAGE_BUSINESS.branding.copyright}
-              </p>
+            <div className="h-1 w-full bg-gold/10 rounded-full overflow-hidden">
+              <motion.div 
+                className="h-full bg-gold" 
+                initial={{ width: 0 }}
+                animate={{ width: `${progress}%` }}
+              />
             </div>
-          </footer>
-        </div>
-      </div>
-
-      <div className={`${view === 'process' ? 'flex print:flex' : 'hidden'} flex-col heritage-export-page`}>
-        <div className="relative flex-1 flex flex-col bg-heritage-biscuit min-h-screen">
-          {/* Header Banner */}
-          <div className="w-full border-b-4 border-heritage-gold z-10">
-             <img 
-              src="/heritage-banner.png" 
-              alt="Heritage Banner" 
-              className="w-full h-auto block"
-            />
           </div>
-          <section className="flex-1 py-12 px-6">
-            <div className="max-w-6xl mx-auto space-y-24 text-heritage-earth">
-               <div className="text-center space-y-6">
-                  <h2 className="text-heritage-midnight text-sm font-bold uppercase tracking-[0.4em]">The Heritage Protocol</h2>
-                  <div className="w-16 h-1 bg-heritage-gold mx-auto"></div>
-                  <p className="text-heritage-midnight/60 italic text-sm">Three stages to an everlasting tribute.</p>
-               </div>
 
-               <div className="grid md:grid-cols-3 gap-12 relative">
-                  <div className="hidden md:block absolute top-1/2 left-32 right-32 h-px bg-heritage-gold/20 -translate-y-1/2 -z-0"></div>
-                  {[
-                    { step: '01', title: 'Commission', icon: Scroll, desc: `Engagement starts with your vision.`, meta: `Secure Fee: ${pricing.deposit}` },
-                    { step: '02', title: 'Acquisition', icon: Search, desc: `We research records, verify lineages, and audit archives.`, meta: '7-14 Days Research' },
-                    { step: '03', title: 'Artifact', icon: Award, desc: `The design is finalized and your artifact is delivered.`, meta: `Artifact Price: ${pricing.fullPrice}` },
-                  ].map((item, idx) => (
-                    <motion.div 
-                      key={idx} 
-                      whileHover={{ y: -5 }}
-                      className="relative bg-white p-10 rounded-3xl border border-heritage-gold/20 shadow-xl text-center space-y-6 z-10"
-                    >
-                      <div className="w-16 h-16 bg-heritage-gold rounded-full flex items-center justify-center mx-auto text-heritage-earth shadow-lg">
-                        <item.icon size={28} />
-                      </div>
-                      <div className="space-y-4">
-                        <h4 className="font-bold text-heritage-earth uppercase tracking-widest text-sm">{item.title}</h4>
-                        <p className="text-heritage-earth text-sm font-medium italic leading-relaxed">{item.desc}</p>
-                        <div className="pt-4 border-t border-heritage-gold/10">
-                          <p className="text-heritage-earth text-base font-bold uppercase tracking-widest">{item.meta}</p>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
-               </div>
+          <main className="flex-1 flex flex-col justify-center max-w-2xl mx-auto w-full">
+            <motion.div 
+              key={questions[currentQuestionIndex].id}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="mb-12"
+            >
+              <h3 className="text-3xl md:text-4xl text-navy font-bold leading-tight mb-12 antialiased">
+                {questions[currentQuestionIndex].text}
+              </h3>
 
-               <div className="bg-white rounded-[3rem] p-12 border border-heritage-gold/10 space-y-12 shadow-sm">
-                 <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-                   <div className="space-y-3">
-                     <h3 className="text-3xl font-serif text-heritage-midnight italic">Curated Artifact Glimpse</h3>
-                     <p className="text-xs opacity-60 uppercase tracking-widest">Shared examples from our growing archive</p>
-                   </div>
-                   <button onClick={() => setView('library')} className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-widest hover:text-heritage-gold transition-colors group">
-                     Visit Full Library <ArrowRight size={16} className="group-hover:translate-x-2 transition-transform" />
-                   </button>
-                 </div>
+              <div className="grid grid-cols-1 gap-3">
+                {[
+                  { label: 'Strongly Agree', val: 5 },
+                  { label: 'Agree', val: 4 },
+                  { label: 'Neutral', val: 3 },
+                  { label: 'Disagree', val: 2 },
+                  { label: 'Strongly Disagree', val: 1 },
+                ].map((opt) => (
+                  <button
+                    key={opt.val}
+                    onClick={() => handleAnswer(opt.val)}
+                    className={`flex items-center justify-between p-6 border transition-all font-sans text-sm font-bold tracking-wide antialiased
+                      ${answers[questions[currentQuestionIndex].id] === opt.val 
+                        ? 'bg-navy text-white border-navy' 
+                        : 'bg-white text-dark border-gold/20 hover:border-gold shadow-sm'}`}
+                  >
+                    {opt.label}
+                    {answers[questions[currentQuestionIndex].id] === opt.val && <CheckCircle2 className="w-5 h-5 text-gold" />}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
 
-                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-                   {artifactsData.slice(0, 4).map((art) => (
-                     <div key={art.id} className="relative group aspect-[4/5] rounded-2xl overflow-hidden shadow-xl border border-heritage-gold/20">
-                       <img src={art.img} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" />
-                       <div className="absolute inset-0 bg-gradient-to-t from-heritage-earth via-heritage-earth/20 to-transparent flex flex-col justify-end p-6 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <p className="text-white text-[10px] font-bold uppercase tracking-widest mb-3">{art.name}</p>
-                          <div className="flex gap-2">
-                             <button onClick={() => setSelectedArtifact(art)} className="flex-1 py-2 bg-heritage-gold text-heritage-earth text-[8px] font-bold uppercase rounded hover:bg-white transition-colors">View</button>
-                             <button onClick={() => { setEnquiryArtifact(art); }} className="flex-1 py-2 bg-white/10 text-white backdrop-blur-md text-[8px] font-bold uppercase rounded border border-white/20 hover:bg-white hover:text-heritage-earth transition-all">Enquire</button>
-                          </div>
-                       </div>
-                     </div>
-                   ))}
-                 </div>
-               </div>
-            </div>
-          </section>
-        </div>
-      </div>
-
-      <section className={`${view === 'library' ? 'block' : 'hidden'} min-h-screen bg-heritage-biscuit py-32 px-6`}>
-         <div className="max-w-6xl mx-auto space-y-24 text-heritage-earth">
-           <div className="text-center space-y-6">
-             <h2 className="text-heritage-midnight text-3xl font-serif italic tracking-tight">The Heritage Artifact Library</h2>
-             <div className="w-24 h-1 bg-heritage-gold mx-auto"></div>
-             <p className="text-heritage-midnight/50 text-xs uppercase tracking-widest">Selected Works & Client Testimonials</p>
-           </div>
-
-           <div className="grid lg:grid-cols-3 gap-16">
-             <div className="lg:col-span-1 space-y-10">
-               <h3 className="font-bold uppercase tracking-widest text-sm border-b border-heritage-gold/10 pb-4 flex items-center gap-3">
-                 <Scroll size={18} /> Client Stories
-               </h3>
-               <div className="space-y-6">
-                  { testimonialsData.map(t => (
-                    <div key={t.id} className="relative bg-white p-8 rounded-2xl italic text-sm leading-relaxed border border-heritage-gold/10 shadow-sm">
-                      <span className="absolute top-4 left-4 text-4xl text-heritage-gold opacity-20">"</span>
-                      {t.text}
-                      <p className="mt-4 not-italic font-bold text-[9px] uppercase tracking-widest opacity-60">— {t.author}</p>
-                    </div>
-                  ))}
-               </div>
-             </div>
-
-             <div className="lg:col-span-2 space-y-10">
-               <h3 className="font-bold uppercase tracking-widest text-sm border-b border-heritage-gold/10 pb-4 flex items-center gap-3">
-                 <Database size={18} /> The Collection
-               </h3>
-               <div className="grid sm:grid-cols-2 gap-8">
-                 { artifactsData.map(art => (
-                   <div 
-                    key={art.id} 
-                    onClick={() => setSelectedArtifact(art)}
-                    className="group cursor-pointer bg-white text-heritage-earth rounded-2xl overflow-hidden border border-heritage-gold/20 hover:border-heritage-gold transition-all duration-500 shadow-2xl flex flex-col"
-                   >
-                     <div className="h-48 overflow-hidden relative border-b border-heritage-gold/10">
-                       <img src={art.img} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-                       <div className="absolute inset-0 bg-heritage-earth/5 group-hover:bg-transparent transition-colors"></div>
-                     </div>
-                     <div className="p-6 space-y-2 flex-1 flex flex-col justify-between">
-                       <div>
-                          <p className="font-bold uppercase tracking-widest text-xs">{art.name}</p>
-                          <p className="text-[10px] italic opacity-60">Subject: {art.subject}</p>
-                       </div>
-                       <div className="pt-4 flex justify-between items-center opacity-40 group-hover:opacity-100">
-                         <span className="text-[9px] uppercase tracking-widest flex items-center gap-1"><Eye size={12}/> Inspect Detail</span>
-                         <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
-                       </div>
-                     </div>
-                   </div>
-                 ))}
-               </div>
-             </div>
-           </div>
-         </div>
-      </section>
-
-      <section className={`${view === 'form' ? 'block' : 'hidden'} min-h-screen bg-heritage-biscuit py-32 px-6`}>
-         <div className="max-w-4xl mx-auto space-y-16 text-heritage-earth">
-           <div className="text-center space-y-6">
-              <h2 className="text-3xl font-serif text-heritage-midnight italic">Commission Your Artifact</h2>
-              <div className="w-20 h-1 bg-heritage-gold mx-auto"></div>
-              <p className="text-xs uppercase tracking-widest opacity-60">Enter the Heritage Protocol Queue</p>
-           </div>
-
-           <div className="bg-white rounded-[2.5rem] p-8 md:p-16 border border-heritage-gold/10 shadow-2xl space-y-12">
-             <form onSubmit={handleCommissionSubmit} className="space-y-12">
-               <div className="grid md:grid-cols-2 gap-10">
-                 <div className="space-y-2">
-                   <label className="text-[9px] font-bold uppercase tracking-widest opacity-50">Client Identity / Name</label>
-                   <input required value={commissionData.clientName} onChange={e => setCommissionData({...commissionData, clientName: e.target.value})} placeholder="Thomas Moore" className="w-full bg-transparent border-b border-heritage-gold/20 py-3 text-sm focus:border-heritage-gold outline-none transition-colors" />
-                 </div>
-                 <div className="space-y-2">
-                   <label className="text-[9px] font-bold uppercase tracking-widest opacity-50">Secure Email for Artifact Delivery</label>
-                   <input required type="email" value={commissionData.clientEmail} onChange={e => setCommissionData({...commissionData, clientEmail: e.target.value})} placeholder="moore@family.com" className="w-full bg-transparent border-b border-heritage-gold/20 py-3 text-sm focus:border-heritage-gold outline-none transition-colors" />
-                 </div>
-               </div>
-
-               <div className="grid md:grid-cols-3 gap-8">
-                 <div className="space-y-2">
-                   <label className="text-[9px] font-bold uppercase tracking-widest opacity-50">Artifact Subject Name</label>
-                   <input value={commissionData.subjectName} onChange={e => setCommissionData({...commissionData, subjectName: e.target.value})} placeholder="Surname / Lineage" className="w-full bg-transparent border-b border-heritage-gold/20 py-3 text-sm focus:border-heritage-gold outline-none" />
-                 </div>
-                 <div className="space-y-2">
-                   <label className="text-[9px] font-bold uppercase tracking-widest opacity-50">Your Relationship</label>
-                   <input value={commissionData.relationship} onChange={e => setCommissionData({...commissionData, relationship: e.target.value})} placeholder="e.g. Descendant" className="w-full bg-transparent border-b border-heritage-gold/20 py-3 text-sm focus:border-heritage-gold outline-none" />
-                 </div>
-                 <div className="space-y-2">
-                   <label className="text-[9px] font-bold uppercase tracking-widest opacity-50">Occasion / Deadline</label>
-                   <input value={commissionData.occasion} onChange={e => setCommissionData({...commissionData, occasion: e.target.value})} placeholder="e.g. Birthday / August" className="w-full bg-transparent border-b border-heritage-gold/20 py-3 text-sm focus:border-heritage-gold outline-none" />
-                 </div>
-               </div>
-pricing.fullPrice
-               <div className="pt-8 border-t border-heritage-gold/10 space-y-8">
-                 <div className="flex flex-col md:flex-row justify-between gap-10">
-                   <div className="space-y-4 max-w-sm">
-                     <h4 className="text-[10px] font-bold uppercase tracking-widest text-heritage-earth">Payment Authorization</h4>
-                     <p className="text-xs italic leading-relaxed opacity-60">Engagement requires a non-refundable deposit to commence archival research and design drafting.</p>
-                     <div className="bg-heritage-earth/5 p-4 rounded-xl space-y-2 border border-heritage-gold/10">
-                        <p className="text-[9px] font-bold uppercase tracking-widest text-heritage-earth/60">EFT Bank Code: {HERITAGE_BUSINESS.payment.eft.bank}</p>
-                        <p className="text-[9px] font-bold uppercase tracking-widest text-heritage-earth/60">Account: {HERITAGE_BUSINESS.payment.eft.accountNumber}</p>
-                        <div className="pt-2">
-                           <a 
-                             href={HERITAGE_BUSINESS.payment.yoco.link} 
-                             target="_blank" 
-                             rel="noopener noreferrer"
-                             className="w-full bg-[#00adef] text-white py-2 rounded font-bold text-[8px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-[#0091c9] transition-colors"
-                           >
-                             <CreditCard size={12} /> Pay with Yoco
-                           </a>
-                        </div>
-                      </div>
-                   </div>
-                   <div className="flex-1 flex flex-col gap-4 text-center">
-                      <div className="bg-heritage-earth text-heritage-gold p-8 rounded-3xl shadow-2xl border border-heritage-gold/30">
-                         <p className="text-[10px] uppercase tracking-widest opacity-60 mb-2">Commission Deposit (ZA)</p>
-                         <p className="text-4xl font-bold tracking-tighter mb-6">{pricing.deposit}</p>
-                         <button 
-                          disabled={isSubmitting}
-                          className="w-full py-4 bg-heritage-gold text-heritage-earth rounded-full text-xs font-bold tracking-widest shadow-xl flex items-center justify-center gap-3 hover:scale-105 hover:bg-white transition-all disabled:opacity-50"
-                         >
-                           {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : (
-                             <>Confirm Commission <ArrowRight size={18} /></>
-                           )}
-                         </button>
-                      </div>
-                      <p className="text-[9px] italic opacity-40">By clicking confirm, you agree to our heritage preservation standards.</p>
-                   </div>
-                 </div>
-               </div>
-             </form>
-           </div>
-         </div>
-      </section>
-
-      <section className={`${view === 'questionnaire' ? 'block' : 'hidden'} min-h-screen bg-heritage-biscuit py-32 px-6`}>
-         <div className="max-w-4xl mx-auto space-y-16 text-heritage-earth">
-           <div className="text-center space-y-6">
-              <h2 className="text-3xl font-serif text-heritage-midnight italic">Heritage Questionnaire</h2>
-              <div className="w-32 h-1 bg-heritage-gold mx-auto"></div>
-              <p className="text-xs uppercase tracking-widest opacity-60">Archival Record Acquisition</p>
-           </div>
-
-           {!commissionData.clientEmail ? (
-             <div className="bg-white p-20 rounded-[3rem] text-center space-y-8 border border-heritage-gold/10 shadow-sm">
-               <History size={48} className="mx-auto text-heritage-gold/40" />
-               <p className="text-lg italic opacity-60">Archival access requires an active commission.</p>
-               <button onClick={() => setView('form')} className="px-10 py-4 bg-heritage-gold text-heritage-earth rounded-full text-xs font-bold uppercase tracking-widest transition-all hover:scale-105">Return to Commission</button>
-             </div>
-           ) : (
-             <div className="bg-white rounded-[3rem] p-8 md:p-16 border border-heritage-gold/10 shadow-2xl">
-               <form onSubmit={handleQuestionnaireSubmit} className="space-y-16">
-                 <div className="space-y-10">
-                   <div className="flex items-center gap-4">
-                     <h3 className="font-bold uppercase tracking-[0.3em] text-[10px] text-heritage-earth">01. Direct Lineage</h3>
-                     <div className="flex-1 h-px bg-heritage-gold/20"></div>
-                   </div>
-                   <div className="grid md:grid-cols-2 gap-10">
-                      <div className="space-y-4">
-                         <h4 className="text-[9px] font-bold uppercase tracking-widest opacity-60 flex items-center gap-2"><Users size={14}/> Paternal Branch</h4>
-                         <div className="space-y-1">
-                           <label className="text-[10px] opacity-40 uppercase">Paternal Grandfather</label>
-                           <input placeholder="Name & Origin" value={questionnaireData.paternalGrandfather} onChange={e => setQuestionnaireData({...questionnaireData, paternalGrandfather: e.target.value})} className="w-full bg-transparent border-b border-heritage-gold/20 py-2 text-sm outline-none" />
-                         </div>
-                         <div className="space-y-1">
-                           <label className="text-[10px] opacity-40 uppercase">Paternal Grandmother</label>
-                           <input placeholder="Name & Origin" value={questionnaireData.paternalGrandmother} onChange={e => setQuestionnaireData({...questionnaireData, paternalGrandmother: e.target.value})} className="w-full bg-transparent border-b border-heritage-gold/20 py-2 text-sm outline-none" />
-                         </div>
-                      </div>
-                      <div className="space-y-4">
-                         <h4 className="text-[9px] font-bold uppercase tracking-widest opacity-60 flex items-center gap-2"><Users size={14}/> Maternal Branch</h4>
-                         <div className="space-y-1">
-                           <label className="text-[10px] opacity-40 uppercase">Maternal Grandfather</label>
-                           <input placeholder="Name & Origin" value={questionnaireData.maternalGrandfather} onChange={e => setQuestionnaireData({...questionnaireData, maternalGrandfather: e.target.value})} className="w-full bg-transparent border-b border-heritage-gold/20 py-2 text-sm outline-none" />
-                         </div>
-                         <div className="space-y-1">
-                           <label className="text-[10px] opacity-40 uppercase">Maternal Grandmother</label>
-                           <input placeholder="Name & Origin" value={questionnaireData.maternalGrandmother} onChange={e => setQuestionnaireData({...questionnaireData, maternalGrandmother: e.target.value})} className="w-full bg-transparent border-b border-heritage-gold/20 py-2 text-sm outline-none" />
-                         </div>
-                      </div>
-                   </div>
-                 </div>
-
-                 <div className="space-y-10">
-                   <div className="flex items-center gap-4">
-                     <h3 className="font-bold uppercase tracking-[0.3em] text-[10px] text-heritage-earth">02. Narratives & Objective</h3>
-                     <div className="flex-1 h-px bg-heritage-gold/20"></div>
-                   </div>
-                   <div className="space-y-8">
-                     <div className="space-y-3">
-                       <label className="text-[9px] font-bold uppercase tracking-widest opacity-60">Known Great-Grandparents / Regions of Origin</label>
-                       <textarea value={questionnaireData.extraGenerations} onChange={e => setQuestionnaireData({...questionnaireData, extraGenerations: e.target.value})} className="w-full bg-transparent border border-heritage-gold/20 rounded-xl p-4 text-sm h-32 focus:border-heritage-gold transition-colors outline-none resize-none" placeholder="Include any known 3rd or 4th generations..." />
-                     </div>
-                     <div className="space-y-3">
-                       <label className="text-[9px] font-bold uppercase tracking-widest opacity-60">Key Family Stories / Heroics / Trivia</label>
-                       <textarea value={questionnaireData.narratives} onChange={e => setQuestionnaireData({...questionnaireData, narratives: e.target.value})} className="w-full bg-transparent border border-heritage-gold/20 rounded-xl p-4 text-sm h-32 focus:border-heritage-gold transition-colors outline-none resize-none" placeholder="Military service, pioneering events, cultural traditions..." />
-                     </div>
-                     <div className="space-y-3">
-                       <label className="text-[9px] font-bold uppercase tracking-widest opacity-60">Research Objectives</label>
-                       <textarea value={questionnaireData.researchObjectives} onChange={e => setQuestionnaireData({...questionnaireData, researchObjectives: e.target.value})} className="w-full bg-transparent border border-heritage-gold/20 rounded-xl p-4 text-sm h-32 focus:border-heritage-gold transition-colors outline-none resize-none" placeholder="What specific questions do you want answered about your history?" />
-                     </div>
-                   </div>
-                 </div>
-
-                 <button disabled={isSubmitting} className="w-full py-5 bg-heritage-earth text-heritage-gold rounded-full text-xs font-bold uppercase tracking-widest shadow-2xl flex items-center justify-center gap-4 hover:scale-105 transition-all disabled:opacity-50">
-                   {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : (
-                     <><FileText size={20} /> Submit Archival Data</>
-                   )}
-                 </button>
-               </form>
-             </div>
-           )}
-         </div>
-       </section>
-
-          {/* Admin / Royalty Dashboard */}
-      <div className={`${view === 'admin' ? 'flex' : 'hidden'} flex-col bg-heritage-earth min-h-screen text-heritage-gold p-8`}>
-        <div className="max-w-4xl mx-auto w-full space-y-8">
-          <div className="flex justify-between items-center border-b border-heritage-gold/20 pb-4">
-            <h2 className="text-2xl font-bold uppercase tracking-[0.2em]">Business Dashboard</h2>
-            <div className="flex items-center gap-3">
-              {pricingDirty && (
-                <span className="text-[9px] uppercase tracking-widest text-amber-400 animate-pulse">
-                  ● Unsaved changes
-                </span>
-              )}
-              <button
-                onClick={async () => {
-                  if (pricingDirty) {
-                    await handleUpdatePricing(pricing);
-                  }
-                  setView('landing');
-                }}
-                className="text-[10px] uppercase tracking-widest font-bold border border-heritage-gold/30 px-4 py-2 rounded-full hover:bg-heritage-gold/10 transition-colors"
+            <div className="flex justify-between items-center mt-auto pt-8">
+              <button 
+                disabled={currentQuestionIndex === 0}
+                onClick={() => setCurrentQuestionIndex(prev => prev - 1)}
+                className="flex items-center gap-2 text-grey hover:text-navy disabled:opacity-30 transition-colors font-sans text-[10px] font-bold uppercase tracking-widest"
               >
-                {pricingDirty ? 'Save & Exit' : 'Exit Dashboard'}
+                <ChevronLeft className="w-4 h-4" />
+                Previous
               </button>
-            </div>
-          </div>
 
-          {!isAdminAuthenticated ? (
-            <div className="flex flex-col items-center justify-center py-20 space-y-6">
-              <CreditCard size={48} className="opacity-20" />
-              <div className="text-center space-y-2">
-                <h3 className="text-lg font-bold uppercase tracking-widest">Secure Access Required</h3>
-                <p className="text-xs italic opacity-60">Enter the Heritage Business Key to view royalty reports.</p>
-              </div>
-              <form onSubmit={handleAdminLogin} className="flex flex-col items-center gap-4 w-full max-w-xs">
-                <input 
-                  type="password"
-                  value={adminPassword}
-                  onChange={(e) => setAdminPassword(e.target.value)}
-                  placeholder="Enter Business Key"
-                  className="w-full bg-transparent border-b border-heritage-gold/30 focus:border-heritage-gold outline-none py-2 text-center text-lg tracking-[0.5em]"
-                />
+              {currentQuestionIndex === questions.length - 1 && answers[questions[currentQuestionIndex].id] && (
                 <button 
-                  type="submit"
-                  className="w-full py-3 bg-heritage-gold text-heritage-earth rounded-full text-[10px] uppercase tracking-widest font-bold hover:scale-105 transition-transform"
+                  onClick={() => {
+                    if (selectedProduct === 'recruiter') {
+                      navigate('/job-context');
+                    } else {
+                      submitAssessment();
+                    }
+                  }}
+                  disabled={isSubmitting}
+                  className="bg-gold text-white px-10 py-4 font-sans text-xs font-bold tracking-[3px] uppercase hover:bg-gold/90 transition-all shadow-lg disabled:opacity-50"
                 >
-                  Access Reports
+                  {isSubmitting ? 'Submitting...' : (selectedProduct === 'recruiter' ? 'NEXT: JOB CONTEXT' : 'SUBMIT')}
                 </button>
-              </form>
+              )}
             </div>
-          ) : (
-            <div className="space-y-12 animate-in fade-in duration-700">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="bg-white/5 p-8 rounded-2xl border border-heritage-gold/10 space-y-2">
-                  <p className="text-[10px] uppercase tracking-widest opacity-60">Monthly Royalties</p>
-                  <p className="text-4xl font-bold">R {royaltyStats?.monthTotal.toFixed(2) || '0.00'}</p>
-                  <p className="text-[10px] italic opacity-40">Calculated at {HERITAGE_BUSINESS.royalty.percentage * 100}% of gross income</p>
+          </main>
+          <Footer />
+        </div>
+      } />
+
+      <Route path="/job-context" element={
+        <div className="page-container p-8 md:p-16 bg-cream">
+          <Letterhead />
+          <main className="flex-1 max-w-2xl mx-auto w-full py-12">
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-white p-10 border border-gold/20 shadow-2xl"
+            >
+              <div className="mb-8 text-center">
+                <div className="inline-block p-3 bg-gold/10 rounded-full text-gold mb-4">
+                  <ShieldCheck className="w-8 h-8" />
                 </div>
-                <div className="bg-white/5 p-8 rounded-2xl border border-heritage-gold/10 space-y-2">
-                  <p className="text-[10px] uppercase tracking-widest opacity-60">YTD Accumulated Balance</p>
-                  <p className="text-4xl font-bold">R {royaltyStats?.ytdTotal.toFixed(2) || '0.00'}</p>
-                  <p className="text-[10px] italic opacity-40">Year to Date: {new Date().getFullYear()}</p>
+                <div className="mb-2">
+                  <span className="font-sans text-[10px] font-bold tracking-[4px] text-gold uppercase">Step 2 of 2</span>
                 </div>
+                <h2 className="text-3xl text-navy font-bold uppercase tracking-tight mb-2">Define the Role</h2>
+                <p className="text-grey font-bold text-sm uppercase tracking-widest mb-4">Converge 3 • Candidate Suitability Analysis</p>
+                <p className="text-navy/60 text-xs font-sans font-medium italic">"Now, let's contextualize your results for the specific position."</p>
               </div>
 
               <div className="space-y-6">
-                <h3 className="text-sm font-bold uppercase tracking-widest border-b border-heritage-gold/10 pb-2">Recent Commissions & Final Payments</h3>
+                <div>
+                  <label className="block font-sans text-[10px] font-bold tracking-[2px] text-grey uppercase mb-2">Job Title</label>
+                  <input 
+                    type="text" 
+                    value={jobTitle}
+                    onChange={(e) => setJobTitle(e.target.value)}
+                    placeholder="e.g. Senior Sales Executive"
+                    className="w-full p-4 bg-navy text-white border border-gold/30 focus:border-gold outline-none font-sans font-black transition-colors placeholder:text-white/30"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-sans text-[10px] font-bold tracking-[2px] text-grey uppercase mb-2">Primary Environment</label>
+                  <select 
+                    value={jobEnvironment}
+                    onChange={(e) => setJobEnvironment(e.target.value)}
+                    className="w-full p-4 bg-navy text-white border border-gold/30 focus:border-gold outline-none font-sans font-black transition-colors"
+                  >
+                    <option value="" className="bg-white text-navy">Select Environment...</option>
+                    <option value="High-pressure / Fast-paced" className="bg-white text-navy">High-pressure / Fast-paced</option>
+                    <option value="Collaborative / Team-oriented" className="bg-white text-navy">Collaborative / Team-oriented</option>
+                    <option value="Solo / Technical / Focused" className="bg-white text-navy">Solo / Technical / Focused</option>
+                    <option value="Client-facing / Relationship-based" className="bg-white text-navy">Client-facing / Relationship-based</option>
+                    <option value="Creative / Unstructured" className="bg-white text-navy">Creative / Unstructured</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-sans text-[10px] font-bold tracking-[2px] text-grey uppercase mb-2">Key Challenge</label>
+                  <input 
+                    type="text" 
+                    value={jobChallenge}
+                    onChange={(e) => setJobChallenge(e.target.value)}
+                    placeholder="e.g. Requires high emotional resilience"
+                    className="w-full p-4 bg-navy text-white border border-gold/30 focus:border-gold outline-none font-sans font-black transition-colors placeholder:text-white/30"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-sans text-[10px] font-bold tracking-[2px] text-grey uppercase mb-2">Job Description (Optional)</label>
+                  <textarea 
+                    value={jobDescription}
+                    onChange={(e) => setJobDescription(e.target.value)}
+                    placeholder="Paste the job description or key requirements here..."
+                    rows={4}
+                    className="w-full p-4 bg-navy text-white border border-gold/30 focus:border-gold outline-none font-sans font-black transition-colors resize-none placeholder:text-white/30"
+                  />
+                </div>
+
+                <button 
+                  onClick={() => submitAssessment({
+                    jobTitle,
+                    jobEnvironment,
+                    jobChallenge,
+                    jobDescription
+                  })}
+                  disabled={isSubmitting || !jobTitle || !jobEnvironment}
+                  className="w-full bg-navy text-white px-8 py-4 font-sans text-xs font-bold tracking-[3px] uppercase hover:bg-navy/90 transition-all shadow-lg disabled:opacity-50"
+                >
+                  {isSubmitting ? 'Processing Analysis...' : 'Complete Analysis'}
+                </button>
+              </div>
+            </motion.div>
+          </main>
+          <Footer />
+        </div>
+      } />
+
+      <Route path="/thank-you" element={
+        <div className="page-container p-8 md:p-16 bg-cream">
+          <Letterhead />
+          
+
+
+
+<main className="flex-1 flex flex-col items-center justify-center text-center py-12 max-w-5xl mx-auto">
+            <div className="w-20 h-20 bg-gold/10 rounded-full flex items-center justify-center text-gold mb-8">
+              <CheckCircle2 className="w-10 h-10" />
+            </div>
+            <h2 className="text-4xl text-navy font-bold mb-4 antialiased uppercase tracking-tight">Assessment Submitted</h2>
+            <p className="text-xl text-dark font-semibold max-w-lg mb-8 antialiased">
+              Thank you, {userName || 'Candidate'}. Your assessment has been successfully received and is being processed.
+            </p>
+            
+            <div className="bg-warm p-8 border-l-4 border-gold max-w-xl mb-12">
+              <p className="text-navy font-bold italic leading-relaxed antialiased">
+                "The results will be sent to your e-mail after verification that the assessment fee has been paid."
+              </p>
+              <p className="text-navy/70 font-bold text-sm mt-3 antialiased">
+                Your chosen report is delivered to your inbox within 24 hours of payment verification.
+              </p>
+              {localStorage.getItem('last_submission_id') && (
+                <p className="text-[10px] text-navy/40 mt-4 uppercase tracking-widest">
+                  Submission ID: {localStorage.getItem('last_submission_id')}
+                </p>
+              )}
+            </div>
+
+            <div className="w-full max-w-4xl bg-white border border-gold/20 shadow-2xl overflow-hidden mb-12 text-left">
+              <div className="bg-navy p-6 text-center">
+               
+
+
+ <h3 className="text-gold font-sans font-bold tracking-[3px] uppercase text-sm antialiased">Payment Information</h3>
+              </div>
+              <div className="p-8 space-y-10">
+                {/* Pricing Table */}
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
+                  <table className="w-full border-collapse text-left">
                     <thead>
-                      <tr className="opacity-40 uppercase tracking-tighter text-[9px] border-b border-heritage-gold/5">
-                        <th className="py-2">Date</th>
-                        <th className="py-2">Client</th>
-                        <th className="py-2">Subject</th>
-                        <th className="py-2">Status</th>
-                        <th className="py-2 text-right">Action</th>
+                      <tr className="border-b border-gold/20">
+                        <th className="py-3 px-4 font-sans text-[9px] font-bold tracking-widest text-grey uppercase">Product Tier</th>
+                        <th className="py-3 px-4 font-sans text-[9px] font-bold tracking-widest text-navy uppercase">Fee ({PRICING.currency})</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-heritage-gold/5">
-                      {recentCommissions.map((c) => (
-                        <tr key={c.id} className="hover:bg-white/5 transition-colors">
-                          <td className="py-3">{new Date(c.created_at).toLocaleDateString()}</td>
-                          <td className="py-3">
-                            <p className="font-bold">{c.client_name}</p>
-                            <p className="opacity-60">{c.client_email}</p>
-                          </td>
-                          <td className="py-3 italic">{c.artifact_subject}</td>
-                          <td className="py-3">
-                            <span className={`px-2 py-0.5 rounded-full text-[8px] uppercase font-bold ${c.final_payment_logged ? 'bg-green-500/20 text-green-400' : 'bg-heritage-gold/20 text-heritage-gold'}`}>
-                              {c.final_payment_logged ? 'Fully Paid' : 'Deposit Paid'}
-                            </span>
-                          </td>
-                          <td className="py-3 text-right">
-                            {!c.final_payment_logged && (
-                              <button 
-                                onClick={() => handleLogFinalPayment(c)}
-                                disabled={isSubmitting}
-                                className="bg-heritage-gold text-heritage-earth px-3 py-1 rounded text-[8px] font-bold uppercase hover:scale-105 transition-transform disabled:opacity-50"
-                              >
-                                Log Final Payment
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                      {recentCommissions.length === 0 && (
-                        <tr>
-                          <td colSpan={5} className="py-10 text-center italic opacity-40">No commissions found.</td>
-                        </tr>
-                      )}
+                    <tbody className="text-sm font-bold">
+                      <tr className="border-b border-gold/5">
+                        <td className="py-4 px-4 text-navy">{PRICING.products.mbti.name}</td>
+                        <td className="py-4 px-4 text-navy">{PRICING.products.mbti.price}</td>
+                      </tr>
+                      <tr className="border-b border-gold/5">
+                        <td className="py-4 px-4 text-navy">{PRICING.products.comprehensive.name}</td>
+                        <td className="py-4 px-4 text-navy">{PRICING.products.comprehensive.price}</td>
+                      </tr>
+                      <tr>
+                        <td className="py-4 px-4 text-navy">{PRICING.products.recruiter.name}</td>
+                        <td className="py-4 px-4 text-navy">{PRICING.products.recruiter.price}</td>
+                      </tr>
                     </tbody>
                   </table>
                 </div>
-              </div>
 
-              <div className="space-y-6">
-                <h3 className="text-sm font-bold uppercase tracking-widest border-b border-heritage-gold/10 pb-2">Archival Questionnaire Submissions</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="opacity-40 uppercase tracking-tighter text-[9px] border-b border-heritage-gold/5">
-                        <th className="py-2">Date</th>
-                        <th className="py-2">Client</th>
-                        <th className="py-2">Main Lineage</th>
-                        <th className="py-2 text-right">Research Objective</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-heritage-gold/5">
-                      {recentQuestionnaires.map((q) => (
-                        <tr key={q.id} className="hover:bg-white/5 transition-colors">
-                          <td className="py-3 whitespace-nowrap">{new Date(q.created_at).toLocaleDateString()}</td>
-                          <td className="py-3 italic">{q.client_email}</td>
-                          <td className="py-3">
-                            <p className="font-bold opacity-80">{q.data.paternalGrandfather} & {q.data.maternalGrandfather}</p>
-                          </td>
-                          <td className="py-3 text-right max-w-xs truncate italic opacity-50">{q.data.researchObjectives}</td>
-                        </tr>
-                      ))}
-                      {recentQuestionnaires.length === 0 && (
-                        <tr>
-                          <td colSpan={4} className="py-10 text-center italic opacity-40">No questionnaire data archived.</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+                <p className="text-[10px] text-navy font-bold uppercase tracking-tight italic px-4 text-center">
+                  {PRICING.paymentNote}
+                </p>
 
-              <div className="space-y-6">
-                <div className="flex items-center justify-between border-b border-heritage-gold/10 pb-2">
-                  <h3 className="text-sm font-bold uppercase tracking-widest">Seasonal Pricing & Promotions</h3>
-                  <div className="flex items-center gap-2">
-                     <span className="text-[9px] uppercase tracking-widest opacity-40">Live Status</span>
-                     <div className={`w-2 h-2 rounded-full ${pricing.showPromo ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' : 'bg-red-500'}`}></div>
-                  </div>
-                </div>
-                <div className="bg-white/5 p-8 rounded-2xl border border-heritage-gold/10 grid md:grid-cols-2 gap-10">
-                  <div className="space-y-6">
-                    <div className="space-y-2">
-                      <label className="text-[10px] uppercase tracking-widest opacity-40">Main Artifact Price</label>
-                      <input 
-                        className="w-full bg-transparent border-b border-heritage-gold/20 py-2 outline-none focus:border-heritage-gold text-lg font-serif"
-                        value={pricing.fullPrice}
-                        onChange={e => { setPricing({...pricing, fullPrice: e.target.value}); setPricingDirty(true); }}
-                      />
+
+
+
+
+
+                {/* Payment Options Section */}
+                <div className="px-4">
+                  <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+                    {/* Banking Details Table */}
+                    <div className="space-y-4">
+                      <h4 className="font-sans font-bold text-navy uppercase text-[10px] tracking-widest border-b border-gold/20 pb-2 text-center">EFT Banking Details ({PRICING.currency})</h4>
+                      <table className="w-full text-xs">
+                        <tbody>
+                          <tr>
+                            <td className="py-1.5 text-grey font-bold uppercase tracking-tighter w-32">Bank</td>
+                            <td className="py-1.5 text-navy font-bold">{BANKING_DETAILS.bank}</td>
+                          </tr>
+                          <tr>
+                            <td className="py-1.5 text-grey font-bold uppercase tracking-tighter">Account Name</td>
+                            <td className="py-1.5 text-navy font-bold">{BANKING_DETAILS.accountHolder}</td>
+                          </tr>
+                          <tr>
+                            <td className="py-1.5 text-grey font-bold uppercase tracking-tighter">Account Number</td>
+                            <td className="py-1.5 text-navy font-bold">{BANKING_DETAILS.accountNumber}</td>
+                          </tr>
+                          <tr>
+                            <td className="py-1.5 text-grey font-bold uppercase tracking-tighter">Branch Code</td>
+                            <td className="py-1.5 text-navy font-bold">{BANKING_DETAILS.branchCode} (Universal)</td>
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] uppercase tracking-widest opacity-40">Deposit Amount (Display)</label>
-                      <input 
-                        className="w-full bg-transparent border-b border-heritage-gold/20 py-2 outline-none focus:border-heritage-gold text-lg font-serif"
-                        value={pricing.deposit}
-                        onChange={e => { setPricing({...pricing, deposit: e.target.value}); setPricingDirty(true); }}
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-6">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-[10px] uppercase tracking-widest opacity-40">Promo Code</label>
-                        <input 
-                          className="w-full bg-transparent border-b border-heritage-gold/20 py-2 outline-none focus:border-heritage-gold font-bold tracking-widest uppercase"
-                          value={pricing.promoCode}
-                          onChange={e => { setPricing({...pricing, promoCode: e.target.value.toUpperCase()}); setPricingDirty(true); }}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] uppercase tracking-widest opacity-40">Discount %</label>
-                        <input 
-                          className="w-full bg-transparent border-b border-heritage-gold/20 py-2 outline-none focus:border-heritage-gold font-bold"
-                          value={pricing.promoDiscount}
-                          onChange={e => { setPricing({...pricing, promoDiscount: e.target.value}); setPricingDirty(true); }}
-                        />
+
+
+
+
+  {/* Yoko Integration */}
+      
+  <div className="space-y-4">
+                     
+<h4 className="font-sat-navy uppercase text-[10px] tracking-widest border-b border-gold/20 pb-2 text-center">Online Payment (Yoko)ns font-bold tex</h4>
+
+                     <div className="h-full flex flex-col items-center justify-center border border-gold/10 p-6 bg-gold/5 rounded-sm">
+
+                        <div className="mb-6 text-center">
+
+
+                          <p className="text-[10px] text-navy font-bold uppercase tracking-widest mb-2">
+                          Secure Instant EFT & Card                                                                                                                       
+                         </p>                        
+                         <p className="text-[8px] text-grey uppercase tracking-tighter">                                                              
+                         Powered by Yoko South Africa</p>
+                        </div>
+                        
+                        <YokoButton />
+                        
+                        <p className="text-[8px] text-grey/60 uppercase tracking-tighter mt-4 text-center">
+                          Your report will be processed upon payment verification
+                        </p>
                       </div>
                     </div>
-                    <div className="pt-4 flex items-center justify-between bg-heritage-gold/5 p-4 rounded-xl border border-heritage-gold/10">
-                       <span className="text-[10px] uppercase tracking-widest opacity-60">Display Promo Banner</span>
-                       <button 
-                        onClick={() => { setPricing({...pricing, showPromo: !pricing.showPromo}); setPricingDirty(true); }}
-                        className={`w-12 h-6 rounded-full transition-all relative ${pricing.showPromo ? 'bg-heritage-gold' : 'bg-white/10'}`}
-                       >
-                         <div className={`absolute top-1 w-4 h-4 rounded-full bg-heritage-earth shadow-sm transition-all ${pricing.showPromo ? 'left-7' : 'left-1'}`}></div>
-                       </button>
-                    </div>
-                  </div>
-                  <div className="md:col-span-2 pt-4">
-                    <button 
-                      onClick={() => handleUpdatePricing(pricing)}
-                      disabled={isSubmitting}
-                      className="w-full py-5 bg-heritage-gold text-heritage-earth rounded-xl text-[10px] font-bold uppercase tracking-[0.2em] flex items-center justify-center gap-3 hover:scale-[1.01] transition-all shadow-xl active:scale-[0.99] disabled:opacity-50"
-                    >
-                      {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Database size={16} />}
-                      Archive Seasonal Pricing Updates
-                    </button>
                   </div>
                 </div>
               </div>
+              
 
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4 text-xs">
-                  <div className="space-y-1">
-                    <p className="opacity-40 uppercase tracking-tighter text-[9px]">Current Owner</p>
-                    <p className="font-bold">{HERITAGE_BUSINESS.owner.fullName}</p>
-                    <p className="opacity-60">{HERITAGE_BUSINESS.owner.email}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="opacity-40 uppercase tracking-tighter text-[9px]">Royalty Recipient</p>
-                    <p className="font-bold">{HERITAGE_BUSINESS.royalty.recipientEmail}</p>
-                    <p className="opacity-60">Fixed Rate: {HERITAGE_BUSINESS.royalty.percentage * 100}%</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="opacity-40 uppercase tracking-tighter text-[9px]">Bank Account</p>
-                    <p className="font-bold">{HERITAGE_BUSINESS.payment.eft.bank}</p>
-                    <p className="opacity-60">{HERITAGE_BUSINESS.payment.eft.accountNumber}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="opacity-40 uppercase tracking-tighter text-[9px]">Yoco Payment Page</p>
-                    <p className="font-bold truncate max-w-[150px]">{HERITAGE_BUSINESS.payment.yoco.link.replace('https://', '')}</p>
-                  </div>
-                </div>
-                <div className="pt-8 text-center">
-                  <p className="text-[10px] italic opacity-40 max-w-md mx-auto">
-                    "This dashboard is for internal business monitoring only. Monthly statements are automatically generated and sent to {HERITAGE_BUSINESS.royalty.recipientEmail} on the last day of each month."
-                  </p>
-                </div>
+<div className="bg-cream p-6 text-center border-t border-gold/10">
+                <p className="text-[10px] text-grey font-bold uppercase tracking-[3px] antialiased">
+                 
+
+
+
+
+ Reference: {BANKING_DETAILS.reference}
+                </p>
               </div>
+            </div>
+            <button 
+              onClick={() => navigate('/')}
+              className="text-navy font-sans text-[10px] font-bold tracking-[3px] uppercase border-b border-navy pb-1 hover:text-gold hover:border-gold transition-colors"
+            >
+              Return Home
+            </button>
+          </main>
+          <Footer />
+        </div>
+      } />
+
+      <Route path="/admin" element={
+        <ProtectedRoute>
+          <AdminDashboard />
+        </ProtectedRoute>
+      } />
+      <Route path="/admin/result/:id" element={
+        <ProtectedRoute>
+          <AdminResultDetail />
+        </ProtectedRoute>
+      } />
+      <Route path="/admin/login" element={<AdminLogin />} />
+    </Routes>
+  );
+}
+
+
+// Admin-only fetch helper: attaches the server-verified admin token
+// (obtained at login from /api/admin/login) to admin API requests.
+// Not used by any customer-facing request.
+async function adminFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const token = localStorage.getItem('admin_token');
+  const headers: Record<string, string> = {
+    ...(options.headers as Record<string, string> || {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+  const res = await fetch(url, { ...options, headers });
+  if (res.status === 401) {
+    localStorage.removeItem('admin_auth');
+    localStorage.removeItem('admin_token');
+    window.location.href = '/admin/login';
+  }
+  return res;
+}
+
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const isAuthenticated = localStorage.getItem('admin_auth') === 'true';
+  if (!isAuthenticated) {
+    return <Navigate to="/admin/login" replace />;
+  }
+  return <>{children}</>;
+};
+
+function AdminLogin() {
+  const [password, setPassword] = React.useState('');
+  const [error, setError] = React.useState('');
+  const navigate = useNavigate();
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    try {
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        localStorage.setItem('admin_auth', 'true');
+        localStorage.setItem('admin_token', data.token);
+        navigate('/admin');
+      } else {
+        setError('Invalid administrative credentials.');
+      }
+    } catch (err) {
+      setError('System Error: Could not reach the server.');
+    }
+  };
+
+  return (
+    <div className="page-container p-8 md:p-16 bg-cream flex items-center justify-center">
+      <div className="max-w-md w-full bg-white p-12 border border-gold/20 shadow-2xl">
+        <div className="flex flex-col items-center mb-10">
+          <div className="w-16 h-16 bg-navy text-gold rounded-full flex items-center justify-center mb-6">
+            <Lock className="w-8 h-8" />
+          </div>
+          <h1 className="font-sans font-bold text-2xl text-navy tracking-[4px] uppercase">Admin Access</h1>
+          <p className="text-grey text-[10px] font-bold tracking-widest uppercase mt-2">Converge Assessment Protocol</p>
+        </div>
+
+        <form onSubmit={handleLogin} className="space-y-6">
+          <div>
+            <label className="block font-sans text-[10px] font-bold tracking-[2px] text-grey uppercase mb-3">Security Key</label>
+            <input 
+              type="password" 
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••••••"
+              className="w-full p-4 bg-cream border border-gold/20 focus:border-gold outline-none font-sans font-black transition-colors"
+            />
+          </div>
+          {error && <p className="text-red-600 text-[10px] font-bold uppercase tracking-wider text-center">{error}</p>}
+          <button 
+            type="submit"
+            className="w-full bg-navy text-white px-8 py-4 font-sans text-xs font-bold tracking-[3px] uppercase hover:bg-navy/90 transition-all"
+          >
+            Authenticate
+          </button>
+          <Link to="/" className="block text-center text-grey text-[10px] font-bold uppercase tracking-widest hover:text-navy transition-colors mt-4">
+            Return to Site
+          </Link>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function AdminDashboard() {
+  const [submissions, setSubmissions] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+  const [deletingId, setDeletingId] = React.useState<any>(null);
+  const [showRaw, setShowRaw] = React.useState(false);
+  const [localHistory, setLocalHistory] = React.useState<any[]>([]);
+
+  React.useEffect(() => {
+    const history = JSON.parse(localStorage.getItem('submission_history') || '[]');
+    setLocalHistory(history);
+  }, []);
+
+  const handleDelete = async (e: React.MouseEvent, id: any) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (deletingId === id) {
+      try {
+        const res = await adminFetch(`/api/results/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          setSubmissions(prev => prev.filter(s => s.id !== id));
+          setDeletingId(null);
+        } else {
+          const err = await res.json();
+          alert(`Delete failed: ${err.details || err.error}`);
+        }
+      } catch (err: any) {
+        alert(`Error: ${err.message}`);
+      }
+    } else {
+      setDeletingId(id);
+      // Reset after 3 seconds if not confirmed
+      setTimeout(() => setDeletingId(null), 3000);
+    }
+  };
+
+  const handleMarkPaid = async (e: React.MouseEvent, sub: any) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!confirm(`Mark payment as received for ${sub.name} (${sub.email})?`)) return;
+
+    const btn = e.currentTarget as HTMLButtonElement;
+    btn.disabled = true;
+
+    try {
+      const res = await adminFetch('/api/admin/mark-paid', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: sub.id })
+      });
+
+      if (res.ok) {
+        setSubmissions(prev => prev.map(s => s.id === sub.id ? { ...s, payment_status: 'paid' } : s));
+      } else {
+        alert('Failed to mark as paid.');
+        btn.disabled = false;
+      }
+    } catch (err) {
+      alert('Error marking payment.');
+      btn.disabled = false;
+    }
+  };
+
+  const handleSendReport = async (e: React.MouseEvent, sub: any) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!confirm(`Send report to ${sub.name} (${sub.email})?`)) return;
+
+    const btn = e.currentTarget as HTMLButtonElement;
+    const originalText = btn.innerText;
+    btn.disabled = true;
+    btn.innerText = 'SENDING...';
+
+    try {
+      const res = await adminFetch('/api/admin/send-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          id: sub.id, 
+          email: sub.email, 
+          name: sub.name, 
+          reportUrl: sub.report_url || sub.reportPath 
+        })
+      });
+
+      if (res.ok) {
+        alert('Report sent successfully!');
+        setSubmissions(prev => prev.map(s => s.id === sub.id ? { ...s, email_sent: true } : s));
+      } else {
+        const err = await res.json();
+        alert(`Failed to send: ${err.details || err.error}`);
+      }
+    } catch (err: any) {
+      alert(`Error: ${err.message}`);
+    } finally {
+      btn.disabled = false;
+      btn.innerText = originalText;
+    }
+  };
+
+  const [diagInfo, setDiagInfo] = React.useState<{ status: string, count: string, exact: string, serviceRole: string, connectionOk: string, connectionError: string, urlPreview: string } | null>(null);
+
+  React.useEffect(() => {
+    console.log('[Dashboard] Fetching results from /api/results...');
+    adminFetch('/api/results')
+      .then(async res => {
+        console.log('[Dashboard] Response status:', res.status);
+        // Capture diagnostic headers
+        setDiagInfo({
+          status: res.headers.get('x-supabase-status') || 'N/A',
+          count: res.headers.get('x-supabase-count') || 'N/A',
+          exact: res.headers.get('x-supabase-exact-count') || 'N/A',
+          serviceRole: res.headers.get('x-using-service-role') || 'false',
+          connectionOk: res.headers.get('x-connection-ok') || 'false',
+          connectionError: res.headers.get('x-connection-error') || '',
+          urlPreview: res.headers.get('x-supabase-url-preview') || 'N/A'
+        });
+        
+        if (!res.ok) {
+          const err = await res.json();
+          console.error('[Dashboard] API Error:', err);
+          throw new Error(err.details || err.error || err.message || 'Failed to fetch results');
+        }
+        return res.json();
+      })
+      .then(data => {
+        console.log('[Dashboard] Data received:', Array.isArray(data) ? data.length : 'not an array');
+        const parsedData = Array.isArray(data) ? data.map((sub: any) => {
+          if (sub.results && typeof sub.results === 'string') {
+            try {
+              sub.results = JSON.parse(sub.results);
+            } catch (e) {
+              console.error('Failed to parse results in dashboard:', e);
+            }
+          }
+          return sub;
+        }) : [];
+        setSubmissions(parsedData);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error('[Dashboard] Fetch Error:', err);
+        setError(err.message);
+        setLoading(false);
+      });
+  }, []);
+
+  const testSubmission = async () => {
+    try {
+      const response = await fetch('/api/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: "Test User (AI Studio)",
+          email: "test@example.com",
+          answers: { "q1": 3, "q2": 4 },
+          results: { mbti: "INTJ", scores: { E: 0, I: 10, S: 0, N: 10, T: 10, F: 0, J: 10, P: 0 } },
+          product: "mbti"
+        })
+      });
+      if (response.ok) {
+        alert("Test submission successful! Refreshing...");
+        window.location.reload();
+      } else {
+        const err = await response.json();
+        alert("Test submission failed: " + (err.details || err.message));
+      }
+    } catch (err) {
+      alert("Network error during test submission");
+    }
+  };
+
+  return (
+    <div className="page-container p-8 md:p-16 bg-cream">
+      <header className="mb-12 flex justify-between items-center border-b border-gold/20 pb-8">
+        <div>
+          <h1 className="font-sans font-bold text-2xl text-navy tracking-[2px] uppercase">Admin Dashboard</h1>
+          <p className="text-grey text-xs font-bold tracking-widest uppercase mt-1">Assessment Submissions</p>
+        </div>
+        <Link to="/" className="text-navy font-sans text-[10px] font-bold tracking-[2px] uppercase hover:text-gold transition-colors">
+          View Site
+        </Link>
+      </header>
+
+      <main className="space-y-4">
+        <div className="bg-navy/5 p-4 border border-navy/10 mb-6 rounded text-[10px] font-mono text-navy/60">
+          <p className="font-bold text-gold mb-2">VERSION: {SYSTEM_VERSION}</p>
+          <p className="text-[8px] opacity-30 mb-2">SYNC_ID: SYNC_20260804_0000</p>
+          <p>DEBUG INFO:</p>
+          <p>Current URL: {window.location.hostname}</p>
+          <div className={`p-2 mb-2 rounded font-bold ${window.location.hostname.includes('vercel.app') ? 'bg-green-500/10 text-green-400' : 'bg-blue-500/10 text-blue-400'}`}>
+            ENVIRONMENT: {window.location.hostname.includes('vercel.app') ? '🚀 VERCEL (REAL)' : '🛠 AI STUDIO (PREVIEW)'}
+          </div>
+          
+          {!window.location.hostname.includes('vercel.app') && (
+            <div className="mb-4 p-2 bg-yellow-500/10 border border-yellow-500/20 text-yellow-500">
+              <p className="font-bold">⚠️ YOU ARE IN THE PREVIEW WINDOW</p>
+              <p>This window is for testing code changes. To see your REAL data, you must visit your Vercel URL.</p>
+              <p className="mt-1">1. Go to your Vercel Dashboard.</p>
+              <p>2. Click on your project name.</p>
+              <p>3. Click the **"Visit"** button.</p>
+              <p>4. Add **/admin** to the end of that URL.</p>
             </div>
           )}
+          
+          <p>Supabase URL (Client): {import.meta.env.VITE_SUPABASE_URL ? `${import.meta.env.VITE_SUPABASE_URL.substring(0, 20)}...` : 'NOT SET'}</p>
+          <p>Supabase URL (Backend): {diagInfo?.urlPreview || 'FETCHING...'}</p>
+          <p>Submissions Count: {submissions.length}</p>
+          <p>Local History Count: {JSON.parse(localStorage.getItem('submission_history') || '[]').length}</p>
+          {diagInfo && (
+            <div className="mt-2 pt-2 border-t border-navy/10 text-gold/80">
+              <p>DB DIAGNOSTICS:</p>
+              <p>HTTP Status: {diagInfo.status}</p>
+              <p>Data Count: {diagInfo.count}</p>
+              <p>Exact DB Count: {diagInfo.exact}</p>
+              <p>DB Connection: {diagInfo.connectionOk === 'true' ? '✅ OK' : '❌ FAILED'}</p>
+              {diagInfo.connectionError && <p className="text-red-400">Error: {diagInfo.connectionError}</p>}
+              <p>RLS Bypass (Service Role): {diagInfo.serviceRole === 'true' ? '✅ ACTIVE' : '❌ NOT SET'}</p>
+              
+              {diagInfo.exact === '0' && submissions.length === 0 && (
+                <div className="mt-2 p-2 bg-red-500/10 border border-red-500/20 text-red-400 text-[9px]">
+                  <p className="font-bold">⚠️ CRITICAL: DATABASE IS EMPTY</p>
+                  <p>Supabase reports 0 rows in 'submissions'.</p>
+                  <p>1. Check if table name is exactly 'submissions' (lowercase).</p>
+                  <p>2. Ensure columns: id, name, email, product, mbti, results, answers, report_url exist.</p>
+                  <p>3. If you just submitted, the data was NOT saved.</p>
+                </div>
+              )}
+              
+              {diagInfo.serviceRole === 'false' && (
+                <div className="mt-2 p-2 bg-gold/10 border border-gold/20 text-gold text-[9px]">
+                  <p className="font-bold">💡 TIP: BYPASS RLS</p>
+                  <p>Add 'SUPABASE_SERVICE_ROLE_KEY' to your environment variables to bypass security policies for this dashboard.</p>
+                </div>
+              )}
+            </div>
+          )}
+          <div className="flex gap-4 mt-4">
+            <button 
+              onClick={async () => {
+                const res = await adminFetch('/api/admin/diagnostics');
+                const data = await res.json();
+                alert(JSON.stringify(data, null, 2));
+              }} 
+              className="mt-2 text-gold hover:underline font-bold uppercase tracking-widest"
+            >
+              Show Diagnostics
+            </button>
+            <button 
+              onClick={async () => {
+                const res = await adminFetch('/api/admin/test-email');
+                const data = await res.json();
+                alert(JSON.stringify(data, null, 2));
+              }} 
+              className="mt-2 text-gold hover:underline font-bold uppercase tracking-widest"
+            >
+              Send Test Email
+            </button>
+            <button 
+              onClick={() => window.location.reload()} 
+              className="mt-2 text-gold hover:underline font-bold uppercase tracking-widest"
+            >
+              Force Refresh Dashboard
+            </button>
+            <button 
+              onClick={testSubmission} 
+              className="mt-2 text-navy hover:underline font-bold uppercase tracking-widest"
+            >
+              Send Test Submission
+            </button>
+            <button 
+              onClick={() => setShowRaw(!showRaw)} 
+              className="mt-2 text-navy/40 hover:underline font-bold uppercase tracking-widest"
+            >
+              {showRaw ? 'Hide' : 'Show'} Raw Data
+            </button>
+          </div>
+          {showRaw && (
+            <pre className="mt-4 p-4 bg-white border border-navy/10 overflow-auto max-h-96 text-[8px]">
+              {JSON.stringify(submissions, null, 2)}
+            </pre>
+          )}
         </div>
-      </div>    
 
+        {localHistory.length > 0 && (
+          <div className="bg-gold/5 p-4 border border-gold/20 mb-6 rounded">
+            <h4 className="text-[10px] font-bold text-gold uppercase tracking-widest mb-2">Local Submission History (Last 5)</h4>
+            <div className="space-y-2">
+              {localHistory.map((h, i) => {
+                const isFound = submissions.some(s => String(s.id) === String(h.id));
+                return (
+                  <div key={i} className="flex justify-between items-center text-[9px] font-mono">
+                    <span className="text-navy">ID: {h.id} | {h.name} ({h.email})</span>
+                    <span className={isFound ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>
+                      {isFound ? '✓ FOUND IN DATABASE' : '✗ MISSING FROM DATABASE'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {loading ? (
+          <p className="text-center py-20 text-grey font-bold animate-pulse">Loading submissions...</p>
+        ) : error ? (
+          <div className="text-center py-20 bg-red-50 border border-red-200 p-8">
+            <p className="text-red-600 font-bold mb-2">Error Loading Dashboard</p>
+            <p className="text-red-500 text-sm">{error}</p>
+            <p className="text-xs text-red-400 mt-4">Make sure SUPABASE_URL and SUPABASE_ANON_KEY are set in environment variables.</p>
+          </div>
+        ) : submissions.length === 0 ? (
+          <div className="text-center py-20 bg-white border border-dashed border-gold/30">
+            <p className="text-grey font-bold">No submissions found yet.</p>
+          </div>
+        ) : (
+          submissions.map((sub) => (
+            <Link 
+              key={sub.id} 
+              to={`/admin/result/${sub.id}`}
+              className="block bg-white p-6 border border-gold/10 hover:border-gold transition-colors group"
+            >
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="text-xl text-navy font-bold group-hover:text-gold transition-colors">{sub.name}</h3>
+                  <p className="text-grey text-sm font-semibold">{sub.email}</p>
+                </div>
+                <div className="text-right flex flex-col items-end">
+                  <div className="text-navy font-bold text-lg">{sub.results?.mbti}</div>
+                  <div className="text-[8px] font-bold tracking-widest uppercase text-gold mb-1">
+                    {sub.product === 'recruiter' ? 'Converge 3' : sub.product === 'comprehensive' ? 'Converge 2' : 'Converge 1'}
+                  </div>
+                  <div className="flex items-center gap-2 mt-1">
+                    {sub.payment_status === 'paid' ? (
+                      <span className="flex items-center gap-1 bg-green-600/10 text-green-600 px-2 py-0.5 text-[8px] font-bold tracking-widest uppercase border border-green-600/20">
+                        <CheckCircle2 className="w-2 h-2" />
+                        Paid
+                      </span>
+                    ) : (
+                      <>
+                        <span className="flex items-center gap-1 bg-grey/10 text-grey px-2 py-0.5 text-[8px] font-bold tracking-widest uppercase border border-grey/20">
+                          <Lock className="w-2 h-2" />
+                          Payment Pending
+                        </span>
+                        <button
+                          onClick={(e) => handleMarkPaid(e, sub)}
+                          className="flex items-center gap-1 bg-navy text-white px-2 py-0.5 text-[8px] font-bold tracking-widest uppercase hover:bg-gold transition-colors border border-navy"
+                        >
+                          Mark Paid
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 mt-2">
+                    {(sub.reportPath || sub.report_url) ? (
+                      <>
+                        <a 
+                          href={sub.reportPath || sub.report_url} 
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex items-center gap-1 bg-gold/10 text-gold px-2 py-0.5 text-[8px] font-bold tracking-widest uppercase hover:bg-gold hover:text-white transition-colors border border-gold/20"
+                        >
+                          <FileText className="w-2 h-2" />
+                          Preview Report
+                        </a>
+                        <button
+                          onClick={(e) => sub.payment_status === 'paid' ? handleSendReport(e, sub) : e.preventDefault()}
+                          disabled={sub.payment_status !== 'paid'}
+                          title={sub.payment_status !== 'paid' ? 'Mark payment as received before sending' : undefined}
+                          className={`flex items-center gap-1 px-2 py-0.5 text-[8px] font-bold tracking-widest uppercase transition-colors border disabled:opacity-40 disabled:cursor-not-allowed ${sub.email_sent ? 'bg-green-600/10 text-green-600 border-green-600/20' : 'bg-navy text-white border-navy hover:bg-gold hover:border-gold'}`}
+                        >
+                          <Mail className="w-2 h-2" />
+                          {sub.email_sent ? 'SENT' : 'SEND TO CLIENT'}
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={async (e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const btn = e.currentTarget;
+                          btn.disabled = true;
+                          btn.innerText = 'GENERATING...';
+                          try {
+                            const res = await adminFetch('/api/admin/generate-report', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ id: sub.id })
+                            });
+                            if (res.ok) {
+                              const data = await res.json();
+                              window.location.reload();
+                            } else {
+                              const errData = await res.json();
+                              alert(`Generation failed: ${errData.message || errData.error || 'Unknown error'}\n\nTry opening the result detail page to see if it generates there.`);
+                              btn.disabled = false;
+                              btn.innerText = 'GENERATE REPORT';
+                            }
+                          } catch (err) {
+                            alert('Error triggering generation.');
+                            btn.disabled = false;
+                            btn.innerText = 'GENERATE REPORT';
+                          }
+                        }}
+                        className="flex items-center gap-1 bg-navy text-white px-2 py-0.5 text-[8px] font-bold tracking-widest uppercase hover:bg-gold transition-colors border border-navy"
+                      >
+                        <Loader2 className="w-2 h-2 animate-spin" />
+                        Generate Report
+                      </button>
+                    )}
+                    <div className="text-grey text-[9px] font-bold tracking-tighter uppercase">
+                      {(() => {
+                        const date = sub.submitted_at || sub.submittedAt;
+                        if (!date) return 'Unknown Date';
+                        try {
+                          return new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+                        } catch (e) {
+                          return 'Invalid Date';
+                        }
+                      })()}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={(e) => handleDelete(e, sub.id)}
+                  className={`ml-4 p-2 rounded-full transition-all flex items-center gap-2 ${
+                    deletingId === sub.id 
+                      ? 'bg-red-600 text-white px-4' 
+                      : 'bg-red-50 text-red-600 hover:bg-red-100'
+                  }`}
+                >
+                  {deletingId === sub.id ? (
+                    <>
+                      <Trash2 className="w-4 h-4" />
+                      <span className="text-[10px] font-bold uppercase tracking-widest">Confirm?</span>
+                    </>
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                </button>
+              </div>
+            </Link>
+          ))
+        )}
+      </main>
+      <Footer />
+    </div>
+  );
+}
+
+function AdminResultDetail() {
+  const { id } = useParams();
+  const [submission, setSubmission] = React.useState<any>(null);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    adminFetch('/api/results')
+      .then(async res => {
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.details || err.error || err.message || 'Failed to fetch results');
+        }
+        return res.json();
+      })
+      .then(data => {
+        const found = data.find((s: any) => s.id.toString() === id);
+        if (found) {
+          // Robust parsing
+          if (found.results) {
+            if (typeof found.results === 'string') {
+              try {
+                found.results = JSON.parse(found.results);
+              } catch (e) {
+                console.error('Failed to parse results JSON:', e);
+                found.results = { mbti: found.mbti || 'Unknown' };
+              }
+            }
+          } else {
+            found.results = { mbti: found.mbti || 'Unknown' };
+          }
+          
+          // Ensure results is an object
+          if (typeof found.results !== 'object') {
+            found.results = { mbti: found.mbti || 'Unknown' };
+          }
+        }
+        setSubmission(found);
+      })
+      .catch(err => {
+        console.error('Detail error:', err);
+        setError(err.message);
+      });
+  }, [id]);
+
+  if (error) return <div className="p-20 text-center font-bold text-red-600">Error: {error}</div>;
+  if (!submission) return <div className="p-20 text-center font-bold text-navy">Loading result...</div>;
+
+  const { results, name, email } = submission;
+  const submittedAt = submission.submitted_at || submission.submittedAt;
+  const reportPath = submission.report_url || submission.reportPath;
+  const typeInfo = results?.mbti ? typeDescriptions[results.mbti as MBTIType] : null;
+
+  const [isSending, setIsSending] = React.useState(false);
+  const [reviewChecked, setReviewChecked] = React.useState(false);
+  const [checklist, setChecklist] = React.useState<Record<number, boolean>>({});
+  const [adminNotes, setAdminNotes] = React.useState(submission.admin_notes || '');
+  const [isSavingNotes, setIsSavingNotes] = React.useState(false);
+
+  const handleChecklistChange = (index: number, checked: boolean) => {
+    const newChecklist = { ...checklist, [index]: checked };
+    setChecklist(newChecklist);
+    const allChecked = [0, 1, 2, 3].every(i => newChecklist[i]);
+    setReviewChecked(allChecked);
+  };
+
+  const [isGenerating, setIsGenerating] = React.useState(false);
+
+  const handleGenerateReport = React.useCallback(async () => {
+    if (!submission || submission.report_url || isGenerating) return;
+    setIsGenerating(true);
+    try {
+      const res = await adminFetch('/api/admin/generate-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: submission.id })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSubmission((prev: any) => ({ ...prev, report_url: data.reportUrl }));
+      }
+    } catch (err) {
+      console.error('Error in auto-generation:', err);
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [submission, isGenerating]);
+
+  React.useEffect(() => {
+    if (submission && !submission.report_url && !isGenerating) {
+      handleGenerateReport();
+    }
+  }, [submission, isGenerating, handleGenerateReport]);
+
+  const handleSaveNotes = async () => {
+    setIsSavingNotes(true);
+    try {
+      const res = await adminFetch(`/api/results/${submission.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ admin_notes: adminNotes })
+      });
+      if (res.ok) alert('Notes saved successfully.');
+    } catch (err) {
+      alert('Error saving notes.');
+    } finally {
+      setIsSavingNotes(false);
+    }
+  };
+
+  const handleMarkPaid = async () => {
+    if (!confirm(`Mark payment as received for ${name} (${email})?`)) return;
+    try {
+      const res = await adminFetch('/api/admin/mark-paid', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: submission.id })
+      });
+      if (res.ok) {
+        setSubmission((prev: any) => ({ ...prev, payment_status: 'paid' }));
+      } else {
+        alert('Failed to mark as paid.');
+      }
+    } catch (err) {
+      alert('Error marking payment.');
+    }
+  };
+
+  const handleSendReport = async () => {
+    if (submission.payment_status !== 'paid') {
+      alert('This submission has not been marked as paid. Mark payment as received before sending.');
+      return;
+    }
+    if (!reviewChecked) {
+      alert('Please complete the review checklist before sending.');
+      return;
+    }
+    if (!confirm(`Send report to ${email}?`)) return;
+    setIsSending(true);
+    try {
+      const res = await adminFetch('/api/admin/send-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: submission.id, email, name, reportUrl: reportPath })
+      });
+      if (res.ok) {
+        alert('Report sent successfully!');
+        setSubmission((prev: any) => ({ ...prev, email_sent: true }));
+      } else {
+        const data = await res.json();
+        alert(`Failed to send report: ${data.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      alert('Error sending report.');
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  return (
+    <div className="page-container p-8 md:p-16">
+      <div className="mb-8 flex justify-between items-center">
+        <Link to="/admin" className="flex items-center gap-2 text-grey hover:text-navy transition-colors font-sans text-[10px] font-bold uppercase tracking-widest">
+          <ChevronLeft className="w-4 h-4" />
+          Back to Dashboard
+        </Link>
+        <div className="text-right flex items-center gap-4">
+          {submission.payment_status === 'paid' ? (
+            <span className="bg-green-600/10 text-green-600 border border-green-600/20 px-3 py-1 text-[8px] font-bold tracking-[2px] uppercase flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3" /> Paid
+            </span>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="bg-grey/10 text-grey border border-grey/20 px-3 py-1 text-[8px] font-bold tracking-[2px] uppercase flex items-center gap-1">
+                <Lock className="w-3 h-3" /> Payment Pending
+              </span>
+              <button
+                onClick={handleMarkPaid}
+                className="bg-navy text-white px-3 py-1 text-[8px] font-bold tracking-[2px] uppercase hover:bg-gold transition-colors"
+              >
+                Mark Paid
+              </button>
+            </div>
+          )}
+          {submission.email_sent && (
+            <span className="bg-green-600 text-white px-3 py-1 text-[8px] font-bold tracking-[2px] uppercase flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3" /> Sent to Client
+            </span>
+          )}
+          <div className="flex gap-2">
+            <div className="relative group">
+              <button
+                onClick={handleSendReport}
+                disabled={isSending || submission.payment_status !== 'paid'}
+                className={`flex items-center gap-2 px-4 py-1 text-[10px] font-bold tracking-[2px] uppercase transition-colors disabled:opacity-50
+                  ${(reviewChecked && submission.payment_status === 'paid') ? 'bg-navy text-white hover:bg-gold' : 'bg-grey/20 text-grey cursor-not-allowed'}`}
+              >
+                <Mail className="w-3 h-3" />
+                {isSending ? 'Sending...' : 'Approve & Send'}
+              </button>
+              {submission.payment_status !== 'paid' ? (
+                <div className="absolute top-full right-0 mt-1 hidden group-hover:block bg-navy text-white text-[7px] px-2 py-1 whitespace-nowrap z-10">
+                  Mark payment as received to enable sending
+                </div>
+              ) : !reviewChecked && (
+                <div className="absolute top-full right-0 mt-1 hidden group-hover:block bg-navy text-white text-[7px] px-2 py-1 whitespace-nowrap z-10">
+                  Complete checklist below to enable sending
+                </div>
+              )}
+            </div>
+            {reportPath ? (
+              <a 
+                href={reportPath}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 bg-gold text-white px-4 py-1 text-[10px] font-bold tracking-[2px] uppercase hover:bg-gold/90 transition-colors"
+              >
+                <FileText className="w-3 h-3" />
+                Preview Report
+              </a>
+            ) : (
+              <div className="flex items-center gap-2 bg-gold/10 text-gold px-4 py-1 text-[10px] font-bold tracking-[2px] uppercase animate-pulse">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Generating PDF...
+              </div>
+            )}
+          </div>
+          <span className="bg-navy text-white px-3 py-1 text-[8px] font-bold tracking-[2px] uppercase">Internal Report</span>
+        </div>
       </div>
 
-      {/* --- GLOBAL FOOTER --- */}
-      <footer className="bg-heritage-earth py-12 px-6 border-t border-heritage-gold/10 text-center no-print">
-        <div className="max-w-4xl mx-auto space-y-4">
-          <div className="flex items-center justify-center gap-6 mb-6 opacity-30">
-             <Globe size={18} className="text-heritage-gold" />
-             <div className="w-12 h-px bg-heritage-gold"></div>
-             <Database size={18} className="text-heritage-gold" />
-             <div className="w-12 h-px bg-heritage-gold"></div>
-             <ShieldCheck size={18} className="text-heritage-gold" />
-          </div>
-          <p className="text-heritage-gold/40 font-sans text-[8px] md:text-[9px] uppercase tracking-[3px] font-bold mb-4">{HERITAGE_BUSINESS.branding.name}</p>
-          <p 
-            onClick={handleCopyrightClick}
-            className="text-heritage-gold font-bold font-sans text-[8px] md:text-[9px] uppercase tracking-[1px] cursor-pointer select-none"
-          >
-            {HERITAGE_BUSINESS.branding.copyright}
-          </p>
-          <div className="pt-6 flex justify-center gap-8 text-[9px] uppercase tracking-widest text-heritage-gold/30">
-             <span className="flex items-center gap-1"><Printer size={10}/> Heirlooms Built to Last</span>
-             <span className="flex items-center gap-1"><Mail size={10}/> Delivered Globally</span>
+      <div className="mb-12 grid md:grid-cols-2 gap-8 bg-gold/5 p-8 border border-gold/20">
+        <div>
+          <h4 className="font-sans font-bold text-[10px] tracking-[3px] uppercase text-navy mb-4">Oversight Checklist</h4>
+          <div className="space-y-3">
+            {[
+              'Verify MBTI type matches cognitive markers',
+              'Check for blatant mis-prints or formatting errors',
+              'Ensure Suitability Indicators align with role context',
+              'Confirm candidate name and details are correct'
+            ].map((item, i) => (
+              <label key={i} className="flex items-center gap-3 cursor-pointer group">
+                <input 
+                  type="checkbox" 
+                  className="w-4 h-4 accent-gold"
+                  checked={!!checklist[i]}
+                  onChange={(e) => handleChecklistChange(i, e.target.checked)}
+                />
+                <span className="text-xs text-navy font-medium group-hover:text-gold transition-colors">{item}</span>
+              </label>
+            ))}
           </div>
         </div>
-      </footer>
+        <div>
+          <h4 className="font-sans font-bold text-[10px] tracking-[3px] uppercase text-navy mb-4">Internal Admin Notes</h4>
+          <textarea 
+            value={adminNotes}
+            onChange={(e) => setAdminNotes(e.target.value)}
+            placeholder="Add internal observations or review notes here..."
+            className="w-full h-24 p-4 text-xs bg-white border border-gold/20 focus:border-gold outline-none font-sans font-medium resize-none"
+          />
+          <button 
+            onClick={handleSaveNotes}
+            disabled={isSavingNotes}
+            className="mt-2 text-[8px] font-bold tracking-[2px] uppercase text-gold hover:text-navy transition-colors flex items-center gap-1"
+          >
+            {isSavingNotes ? 'Saving...' : 'Save Internal Notes'}
+          </button>
+        </div>
+      </div>
+
+      <Letterhead />
+      
+      <div className="py-10 border-b border-gold/10">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-8">
+          <div className="max-w-xl">
+            <h2 className="font-sans font-bold text-4xl text-navy mb-1">{name}</h2>
+            <p className="font-sans text-grey text-sm font-semibold mb-2">{submission.email}</p>
+            <p className="font-sans text-gold italic text-lg">
+              {results?.mbti || 'Unknown Type'} 
+              {typeInfo && ` • ${typeInfo.title} • ${typeInfo.subtitle}`}
+            </p>
+            <p className="font-sans text-grey text-[10px] tracking-[2px] uppercase mt-4">Assessment Date: {submittedAt ? new Date(submittedAt).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }) : 'Unknown'}</p>
+          </div>
+          <div className="bg-warm p-6 border-l-2 border-gold">
+            <div className="flex items-center gap-4 mb-2">
+              <div className="text-grey font-sans text-[8px] font-bold tracking-[3px] uppercase">
+                {submission.product === 'recruiter' ? 'Converge 3' : submission.product === 'comprehensive' ? 'Converge 2' : 'Converge 1'}
+              </div>
+            </div>
+            <div className="text-navy font-sans text-5xl font-bold">{results?.mbti || 'N/A'}</div>
+            <div className="text-gold font-sans italic text-[10px] mt-1">Cross-validated</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-warm px-10 md:px-16 py-8 border-b border-gold/10">
+        <p className="text-lg leading-relaxed text-dark font-bold italic antialiased">
+          CONVERGE<sup>™</sup> has identified a verified psychological architecture. Your results show high consistency across all three validated frameworks.
+        </p>
+      </div>
+
+      <main className="px-10 md:px-16 py-12">
+        <section className="mb-16 break-inside-avoid">
+          <h2 className="section-label">Section 1 • Personality Type Analysis</h2>
+          <div className="bg-white p-8 border border-gold/10">
+            <div className="flex flex-col md:flex-row justify-between items-start gap-8 mb-8">
+              <div className="flex-1">
+                <h3 className="text-5xl text-navy font-bold mb-4 antialiased italic">{results?.mbti || 'Unknown'}</h3>
+                {typeInfo ? (
+                  <>
+                    <h4 className="text-gold font-sans font-bold tracking-[3px] uppercase text-sm mb-4">{typeInfo.title} • {typeInfo.subtitle}</h4>
+                    <p className="text-dark font-medium leading-relaxed antialiased">{typeInfo.description}</p>
+                  </>
+                ) : (
+                  <p className="text-grey italic">Detailed personality type information is not available for this profile.</p>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-2 w-full md:w-auto">
+                {results?.mbti && results.mbti.length >= 4 ? (
+                  [
+                    { char: results.mbti[0], label: results.mbti[0] === 'E' ? 'Extraverted' : 'Introverted' },
+                    { char: results.mbti[1], label: results.mbti[1] === 'S' ? 'Sensing' : 'Intuitive' },
+                    { char: results.mbti[2], label: results.mbti[2] === 'T' ? 'Thinking' : 'Feeling' },
+                    { char: results.mbti[3], label: results.mbti[3] === 'J' ? 'Judging' : 'Perceiving' },
+                  ].map((dim, i) => (
+                    <div key={i} className="bg-warm p-3 border border-gold/5 text-center min-w-[100px]">
+                      <div className="text-navy text-2xl font-bold italic">{dim.char}</div>
+                      <div className="text-gold text-[7px] font-bold tracking-[1px] uppercase">{dim.label}</div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="col-span-2 text-grey text-[10px] italic">Dimensions not available</div>
+                )}
+              </div>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-12 border-t border-gold/10 pt-8">
+              {typeInfo ? (
+                <>
+                  <div className="space-y-6">
+                    <div>
+                      <h5 className="text-navy font-sans font-bold text-[10px] tracking-[3px] uppercase mb-4 border-b border-gold/20 pb-2">Key Strengths</h5>
+                      <ul className="space-y-2">
+                        {typeInfo.strengths?.map((s: string, i: number) => (
+                          <li key={i} className="flex gap-2 text-sm text-dark font-medium">
+                            <span className="text-gold">•</span> {s}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <h5 className="text-navy font-sans font-bold text-[10px] tracking-[3px] uppercase mb-4 border-b border-gold/20 pb-2">Professional Environment</h5>
+                      <p className="text-sm text-dark font-medium leading-relaxed italic">{typeInfo.workplace}</p>
+                    </div>
+                  </div>
+                  <div className="space-y-6">
+                    <div>
+                      <h5 className="text-navy font-sans font-bold text-[10px] tracking-[3px] uppercase mb-4 border-b border-gold/20 pb-2">Potential Challenges</h5>
+                      <ul className="space-y-2">
+                        {typeInfo.challenges?.map((c: string, i: number) => (
+                          <li key={i} className="flex gap-2 text-sm text-dark font-medium">
+                            <span className="text-gold">•</span> {c}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <h5 className="text-navy font-sans font-bold text-[10px] tracking-[3px] uppercase mb-4 border-b border-gold/20 pb-2">Development Pathway</h5>
+                      <p className="text-sm text-dark font-medium leading-relaxed italic">{typeInfo.growth}</p>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="col-span-2 text-center py-8 text-grey italic">
+                  Additional behavioral insights are only available for standard MBTI types.
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+
+        <section className="mb-16 break-inside-avoid">
+          <h2 className="section-label">Section 2 • Big Five Clinical Data</h2>
+          <div className="overflow-x-auto">
+            {results?.bigFive ? (
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="bg-navy text-white font-sans text-[9px] tracking-[3px] uppercase">
+                    <th className="p-4 text-left">Trait</th>
+                    <th className="p-4 text-left">Score</th>
+                    <th className="p-4 text-left">Interpretation</th>
+                  </tr>
+                </thead>
+                <tbody className="font-sans text-sm">
+                  {[
+                    { trait: 'Openness', score: results?.bigFive?.openness || 0, desc: 'Intellectual curiosity and systems thinking' },
+                    { trait: 'Conscientiousness', score: results?.bigFive?.conscientiousness || 0, desc: 'Drive, self-discipline, and execution focus' },
+                    { trait: 'Extraversion', score: results?.bigFive?.extraversion || 0, desc: 'Social energy and outward orientation' },
+                    { trait: 'Agreeableness', score: results?.bigFive?.agreeableness || 0, desc: 'Focus on harmony vs independent principle' },
+                    { trait: 'Emotional Stability', score: results?.bigFive?.emotionalStability || 0, desc: 'Internal sensitivity and stress resilience' },
+                  ].map((row, i) => (
+                    <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-warm'}>
+                      <td className="p-4 font-bold text-navy antialiased">{row.trait}</td>
+                      <td className="p-4 text-gold font-bold antialiased">{row.score}th Percentile</td>
+                      <td className="p-4 text-dark font-semibold antialiased">{row.desc}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p className="text-center py-10 text-grey italic">Big Five data not available for this profile.</p>
+            )}
+          </div>
+        </section>
+
+        <section className="mb-16 break-inside-avoid">
+          <h2 className="section-label">Section 3 • Emotional Intelligence</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {results?.ei ? (
+              [
+                { icon: <ShieldCheck />, label: 'Self-Awareness', score: results?.ei?.selfAwareness || 0 },
+                { icon: <Zap />, label: 'Self-Regulation', score: results?.ei?.selfRegulation || 0 },
+                { icon: <Brain />, label: 'Motivation', score: results?.ei?.motivation || 0 },
+                { icon: <Info />, label: 'Empathy', score: results?.ei?.empathy || 0 },
+                { icon: <FileText />, label: 'Social Skills', score: results?.ei?.socialSkills || 0 },
+              ].map((item, i) => (
+                <div key={i} className="flex items-center gap-4 bg-warm p-6 border-l-4 border-navy">
+                  <div className="text-gold">{item.icon}</div>
+                  <div className="flex-1">
+                    <div className="flex justify-between items-end mb-2">
+                      <span className="font-sans text-[10px] font-bold tracking-wider uppercase text-grey">{item.label}</span>
+                      <span className="font-sans text-xs font-bold text-navy">{item.score}%</span>
+                    </div>
+                    <div className="h-1 w-full bg-navy/10 rounded-full overflow-hidden">
+                      <div className="h-full bg-navy" style={{ width: `${item.score}%` }} />
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="col-span-2 text-center py-10 text-grey italic">Emotional Intelligence data not available.</p>
+            )}
+          </div>
+        </section>
+
+        <section className="bg-navy p-10 text-center">
+          <h4 className="font-sans text-[10px] font-bold tracking-[5px] text-gold uppercase mb-4">Profile Integrity</h4>
+          <p className="text-gold-lt italic text-lg max-w-2xl mx-auto font-medium">
+            "The consistency of results across three independent methodological approaches distinguishes this profile from a single-instrument result."
+          </p>
+        </section>
+      </main>
+
+      <Footer />
     </div>
   );
 }
